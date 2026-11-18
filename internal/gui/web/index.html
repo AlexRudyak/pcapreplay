@@ -1,0 +1,162 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>pktreplay</title>
+<link rel="stylesheet" href="style.css">
+<link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 16 16'%3E%3Cpath d='M2 8h3l2-5 3 10 2-5h2' fill='none' stroke='%232f6fed' stroke-width='1.6' stroke-linecap='round' stroke-linejoin='round'/%3E%3C/svg%3E">
+</head>
+<body>
+<header>
+  <div class="brand"><svg viewBox="0 0 16 16" width="20" height="20" aria-hidden="true"><path d="M2 8h3l2-5 3 10 2-5h2" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"/></svg> pktreplay</div>
+  <span class="muted" id="ver"></span>
+  <span class="spacer"></span>
+  <span class="badge" id="elev"></span>
+</header>
+
+<main>
+  <section class="card" id="source">
+    <h2>Capture</h2>
+    <div class="row">
+      <input id="path" class="grow" type="text" placeholder="Path to a .pcap / .pcapng file" spellcheck="false" autocomplete="off">
+      <button id="browse" type="button">Browse…</button>
+    </div>
+    <div class="grid3">
+      <label class="grow2">Filter
+        <input id="filter" type="text" placeholder='e.g. src_ip == 192.168.1.0/24 AND dst_port == 8080' spellcheck="false" autocomplete="off">
+        <small id="filterMsg" class="hint">Header terms run before payload terms. Use <code>payload contains "x"</code> or <code>payload ~ "regex"</code>.</small>
+      </label>
+      <label>Start at packet <input id="start" type="number" min="0" value="0"></label>
+      <label>Max packets <input id="count" type="number" min="0" value="0"><small class="hint">0 = all</small></label>
+    </div>
+  </section>
+
+  <nav class="tabs" role="tablist">
+    <button role="tab" id="tab-analyze" aria-selected="true">Analyze</button>
+    <button role="tab" id="tab-replay" aria-selected="false">Replay</button>
+  </nav>
+
+  <!-- ANALYZE -->
+  <section id="panel-analyze">
+    <div class="row">
+      <button id="runStats" class="primary" type="button">Run analysis</button>
+      <button id="stopStats" type="button" hidden>Stop</button>
+      <span class="muted" id="statsNote">One streaming pass; memory stays flat however large the file is.</span>
+    </div>
+    <div class="progress" id="statsProgress" hidden><div class="bar"><i id="statsBar"></i></div><span id="statsProgText" class="muted"></span></div>
+    <div id="statsError" class="alert" hidden></div>
+    <div id="statsResult" hidden>
+      <div class="kpis" id="kpis"></div>
+      <div class="grid2">
+        <div class="card"><h3>Protocols</h3><div id="protoBars"></div></div>
+        <div class="card"><h3>Top talkers <small class="muted">(bytes, bounded sketch)</small></h3><div id="talkers"></div></div>
+        <div class="card"><h3>TCP destination ports</h3><div id="tcpPorts"></div></div>
+        <div class="card"><h3>UDP destination ports</h3><div id="udpPorts"></div></div>
+      </div>
+    </div>
+  </section>
+
+  <!-- REPLAY -->
+  <section id="panel-replay" hidden>
+    <div class="replay-layout">
+      <div class="col">
+        <div class="card">
+          <h3>Transmission mode <span class="req">required</span></h3>
+          <div class="seg" id="modeSeg" role="radiogroup" aria-label="Transmission mode">
+            <button type="button" role="radio" aria-checked="false" data-mode="tcp"><b>TCP</b><small>Real 3-way handshake, then replay one client stream</small></button>
+            <button type="button" role="radio" aria-checked="false" data-mode="udp"><b>UDP</b><small>Stateless injection of datagrams</small></button>
+          </div>
+        </div>
+
+        <div class="card">
+          <h3>Rewrite <small class="muted">(empty = keep captured value)</small></h3>
+          <div class="grid4">
+            <label>Source IP<input id="srcIp" type="text" placeholder="captured" spellcheck="false"></label>
+            <label>Source port<input id="srcPort" type="number" min="0" max="65535" placeholder="captured"></label>
+            <label>Destination IP<input id="dstIp" type="text" placeholder="captured" spellcheck="false"></label>
+            <label>Destination port<input id="dstPort" type="number" min="0" max="65535" placeholder="captured"></label>
+          </div>
+          <label>Replace entire payload <input id="payload" type="text" placeholder='text, hex:de ad be ef, or 0xdeadbeef' spellcheck="false"></label>
+          <label>Substitutions <small class="muted">one per line: <code>old=&gt;new</code></small>
+            <textarea id="replace" rows="2" spellcheck="false" placeholder="tenant-a=>tenant-b"></textarea></label>
+        </div>
+
+        <div class="card">
+          <h3>Pacing</h3>
+          <div class="grid4">
+            <label>Mode
+              <select id="paceMode">
+                <option value="original">Original capture timing</option>
+                <option value="fixed">Fixed delay</option>
+                <option value="pps">Packets per second cap</option>
+                <option value="mbps">Throughput cap (Mbit/s)</option>
+                <option value="burst">Line rate (no pacing)</option>
+              </select></label>
+            <label data-pace="original">Speed ×<input id="speed" type="number" min="0" step="0.1" value="1"></label>
+            <label data-pace="original">Max idle gap<input id="maxGap" type="text" placeholder="e.g. 500ms"></label>
+            <label data-pace="fixed">Delay<input id="delay" type="text" placeholder="e.g. 250us, 5ms"></label>
+            <label data-pace="pps">Packets/s<input id="pps" type="number" min="1" value="10000"></label>
+            <label data-pace="mbps">Mbit/s<input id="mbps" type="number" min="0.1" step="0.1" value="100"></label>
+            <label>Passes <input id="loop" type="number" min="1" value="1"></label>
+          </div>
+        </div>
+
+        <div class="card" id="tcpCard" hidden>
+          <h3>TCP stream</h3>
+          <div class="grid4">
+            <label>Skip first N bytes<input id="skipBytes" type="number" min="0" value="0"><small class="hint">start mid-stream</small></label>
+            <label>Sequence offset<input id="seqOffset" type="number" value="0"><small class="hint">signed shift, bytes</small></label>
+            <label>ACK mode
+              <select id="ackMode"><option value="live">Live (ack what was received)</option><option value="capture">Capture-rebased</option></select></label>
+            <label>Handshake timeout<input id="handshakeTimeout" type="text" value="5s"></label>
+          </div>
+          <small class="hint">The first matching packet defines the client. Captured SYN / SYN-ACK / RST packets are never re-injected; a mid-stream capture is anchored at its first data packet.</small>
+        </div>
+
+        <div class="card">
+          <h3>Backend</h3>
+          <div class="grid4">
+            <label>Backend
+              <select id="backend"><option value="auto">Raw injection (this OS)</option><option value="null">Dry run (null, nothing sent)</option></select></label>
+          </div>
+          <details><summary>Advanced</summary>
+            <div class="grid4">
+              <label>Interface<input id="iface" type="text" placeholder="auto" spellcheck="false"></label>
+              <label>Source MAC<input id="srcMac" type="text" placeholder="auto" spellcheck="false"></label>
+              <label>Next-hop MAC<input id="dstMac" type="text" placeholder="auto (ARP)" spellcheck="false"></label>
+              <label>WinDivert IfIdx<input id="ifIndex" type="number" min="0" value="0"></label>
+            </div>
+            <label class="check"><input id="noFirewall" type="checkbox"> Don't install the Linux RST-drop firewall rule (I manage it)</label>
+          </details>
+        </div>
+      </div>
+
+      <aside class="col sticky">
+        <div class="card live">
+          <div class="row"><h3 class="grow">Live</h3><span class="pill" id="pill">idle</span></div>
+          <div class="live-grid" id="liveGrid"></div>
+          <div id="replayError" class="alert" hidden></div>
+          <div class="row">
+            <button id="runReplay" class="primary grow" type="button" disabled>Start replay</button>
+            <button id="stopReplay" class="danger" type="button" hidden>Stop</button>
+          </div>
+          <small class="hint" id="startHint">Choose a capture and a transmission mode to enable replay.</small>
+          <div id="tcpInfo" class="tcpinfo" hidden></div>
+          <pre id="log" class="log" aria-live="polite"></pre>
+        </div>
+      </aside>
+    </div>
+  </section>
+</main>
+
+<dialog id="dlg">
+  <form method="dialog" class="dlg-head"><b>Choose a capture</b><button value="close" class="ghost" aria-label="Close">✕</button></form>
+  <div class="row dlg-path"><button id="up" type="button">↑ Up</button><code id="curDir" class="grow"></code></div>
+  <div id="roots" class="row wrap"></div>
+  <ul id="entries" class="entries"></ul>
+</dialog>
+
+<script src="app.js"></script>
+</body>
+</html>

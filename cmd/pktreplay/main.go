@@ -12,6 +12,7 @@ Usage:
   pktreplay stats  [flags] <capture>     one-pass summary statistics
   pktreplay index  [flags] <capture>     build a seek index for large files
   pktreplay replay [flags] <capture>     replay filtered packets (see 'replay -h')
+  pktreplay gui    [-no-open]            local web GUI (loopback only, token protected)
 
 Run 'pktreplay <command> -h' for the flags of each command.
 `
@@ -25,6 +26,8 @@ func main() {
 	switch os.Args[1] {
 	case "stats":
 		err = cmdStats(os.Args[2:])
+	case "gui":
+		err = cmdGUI(os.Args[2:])
 	case "replay":
 		err = cmdReplay(os.Args[2:])
 	case "index":
