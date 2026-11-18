@@ -55,6 +55,20 @@ type Backend interface {
 	Close() error
 }
 
+// ByName returns the backend for "auto" (the platform default) or "null".
+func ByName(name string) (Backend, error) {
+	switch name {
+	case "null", "dry-run":
+		return &Null{}, nil
+	case "", "auto":
+		if b := platformDefault(); b != nil {
+			return b, nil
+		}
+		return nil, errors.New("no packet-injection backend for this OS (supported: linux, windows)")
+	}
+	return nil, fmt.Errorf("unknown backend %q (want auto or null)", name)
+}
+
 // LocalAddrFor returns the local source address the OS would use to reach
 // remote, without sending any traffic.
 func LocalAddrFor(remote netip.Addr) (netip.Addr, error) {
