@@ -294,7 +294,11 @@ func TestPayloadRewriteKeepsStreamContiguous(t *testing.T) {
 func TestServerDataIsAcknowledged(t *testing.T) {
 	fs := newFake()
 	fs.replyBytes = 100
-	res, err := RunTCP(context.Background(), baseCfg(t, withHandshake(), fs))
+	cfg := baseCfg(t, withHandshake(), fs)
+	// Pace the segments so the reply is processed before the later ones leave;
+	// in burst mode they could all be sent before the reply is read.
+	cfg.Pace = pace.Config{Mode: pace.Fixed, Delay: 20 * time.Millisecond}
+	res, err := RunTCP(context.Background(), cfg)
 	if err != nil {
 		t.Fatal(err)
 	}
