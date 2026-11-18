@@ -18,9 +18,26 @@ dependencies, one codebase for Windows and Linux. Design and measurements: [docs
 * Pacing: original timing (+speed), fixed delay, packets/s, Mbit/s, line rate.
 * Backends: Linux `AF_PACKET` + `sendmmsg`, Windows WinDivert, and a `null` dry-run backend.
 
+## GUI
+```bash
+pktreplay gui            # starts a local server and opens your browser
+pktreplay gui -no-open   # just print the URL
+```
+The GUI is a web interface embedded in the binary (no extra files, works offline, same Windows/Linux builds).
+It has an **Analyze** tab (streaming statistics with progress, protocol mix, top talkers, ports) and a **Replay**
+tab (explicit TCP/UDP selection, rewrites, pacing, TCP stream offsets, backend options, live counters and log).
+Replay stays disabled until a capture and a transmission mode are chosen. Start it elevated
+(Administrator / root) for raw injection; the header badge shows whether it is.
+
+Security model: the server listens on **loopback only** (it refuses any other address), every request needs a
+random per-launch token (the printed URL contains it and is exchanged for an HttpOnly, SameSite=Strict cookie),
+and Host / Origin / content-type checks block DNS-rebinding and cross-site requests. Because it can inject
+packets, do not forward its port to other machines.
+
 ## Layout
 ```
-cmd/pktreplay        CLI (stats, index, replay)
+cmd/pktreplay        CLI (stats, index, replay, gui)
+internal/gui         local web GUI: HTTP API, job manager, embedded web/ frontend
 cmd/pcapgen          synthetic capture generator for tests and benchmarks
 internal/pcapio      streaming PCAP/PCAPNG reader + sparse index
 internal/decode      zero-allocation L2/L3/L4 header decoder
