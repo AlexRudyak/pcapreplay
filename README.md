@@ -29,12 +29,20 @@ pktreplay gui            # starts a local server and opens your browser
 pktreplay gui -no-open   # just print the URL
 ```
 The GUI is a web interface embedded in the binary (no extra files, works offline, same Windows/Linux builds).
-It has an **Analyze** tab (streaming statistics with progress, protocol mix, top talkers, ports) and a **Replay**
-tab (explicit TCP/UDP selection, rewrites, pacing, TCP stream offsets, backend options, live counters and log).
-After an analysis, the Replay tab lists the capture's conversations as a pick-list (filtered to what the chosen
-mode can replay): tick the ones to modify and edit their addresses, ports or payload; the rest replay unchanged.
-Replay stays disabled until a capture and a transmission mode are chosen. Start it elevated
-(Administrator / root) for raw injection; the header badge shows whether it is.
+It is a single page that follows the order you work in, with a numbered stepper at the top:
+
+1. **Capture**: choose a file (it is analysed automatically, with progress); optional filter and packet range;
+   an overview of packets, protocols, top talkers and ports.
+2. **Choose what to replay**: pick TCP or UDP (never guessed), then tick conversations in one table (filtered to
+   what the mode can send). Tick none to send everything; a ticked conversation can be edited (addresses, ports,
+   payload) and the others are sent only if you ask for them.
+3. **Settings**: timing, TCP stream options, recording, backend, and the advanced rewrite-every-packet option.
+4. **Send**: always visible beside the steps. A plain-language summary says exactly what will be sent, then
+   live counters, TCP session details, recording status and the log.
+
+Sending stays disabled until a capture and a transmission mode are chosen. Start it elevated
+(Administrator / root) for raw injection; the header badge shows whether it is (when it is not, the backend
+defaults to the dry run).
 
 Security model: the server listens on **loopback only** (it refuses any other address), every request needs a
 random per-launch token (the printed URL contains it and is exchanged for an HttpOnly, SameSite=Strict cookie),

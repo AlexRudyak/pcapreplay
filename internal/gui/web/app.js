@@ -1,15 +1,21 @@
 "use strict";
-// pktreplay GUI. All server-supplied text is inserted with textContent, never innerHTML.
+// pktreplay GUI: one page, four steps (Capture -> Choose -> Settings -> Send).
+// All server-supplied text is inserted with textContent, never innerHTML.
 
 const $ = (s) => document.querySelector(s);
 const $$ = (s) => [...document.querySelectorAll(s)];
 const el = (tag, cls, text) => { const e = document.createElement(tag); if (cls) e.className = cls; if (text !== undefined) e.textContent = text; return e; };
 
-let mode = "";          // "tcp" | "udp" | "" (must be chosen explicitly)
-let lastState = "idle";
-let lastKind = "";
+// ---------- state ----------
+let mode = "";            // "tcp" | "udp" | "" (never guessed)
+let lastState = "idle", lastKind = "";
 let poller = null;
 let info = {};
+let convData = null;      // latest analysis summary
+let analysisSource = null; // capture/filter/range convData was built from
+let summaryKey = "";
+const rules = [];         // ticked conversations (+ optional per-conversation changes)
+const MAX_ROWS = 500;
 
 async function api(path, body) {
   const opts = body === undefined ? {} : { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(body) };
@@ -33,21 +39,16 @@ function fmtDur(s) {
   if (s < 90) return s.toFixed(2) + " s";
   const m = Math.floor(s / 60); return m + " min " + Math.round(s - m * 60) + " s";
 }
+const baseName = (p) => p.split(/[\\/]/).filter(Boolean).pop() || p;
+const plural = (n, w) => n + " " + w + (n === 1 ? "" : "s");
+const endpoint = (proto, ip, port) => (proto !== "tcp" && proto !== "udp") ? ip : (ip.includes(":") ? "[" + ip + "]:" + port : ip + ":" + port);
 
-// ---------- tabs ----------
-function selectTab(name) {
-  for (const t of ["analyze", "replay"]) {
-    $("#tab-" + t).setAttribute("aria-selected", String(t === name));
-    $("#panel-" + t).hidden = t !== name;
-  }
-}
-$("#tab-analyze").onclick = () => selectTab("analyze");
-$("#tab-replay").onclick = () => selectTab("replay");
+function showErr(sel, msg) { const e = $(sel); e.textContent = msg; e.hidden = !msg; }
 
-// ---------- source card ----------
+// ---------- step 1: capture, filter, analysis ----------
 const range = () => ({
   path: $("#path").value.trim(), filter: $("#filter").value,
-  start: Math.max(0, parseInt($("#start").value || "0", 10)), count: Math.max(0, parseInt($("#count").value || "0", 10)),
+  start: Math.max(0, parseInt($("#start").value || "0", 10) || 0), count: Math.max(0, parseInt($("#count").value || "0", 10) || 0),
 });
 
 let filterTimer;
@@ -59,55 +60,29 @@ $("#filter").addEventListener("input", () => {
       const r = await api("/api/filter/check", { filter: f.value });
       f.classList.toggle("bad", !r.ok);
       const m = $("#filterMsg");
-      m.textContent = r.ok ? "Filter is valid." : r.error;
+      m.textContent = r.ok ? (f.value.trim() ? "Filter is valid." : "Header terms run before payload terms. Use payload contains \"x\" or payload ~ \"regex\".") : r.error;
       m.style.color = r.ok ? "" : "var(--err)";
-    } catch (_) { /* ignore transient errors */ }
+    } catch (_) { /* transient */ }
   }, 250);
 });
-$("#path").addEventListener("input", refreshButtons);
 
-// ---------- file browser ----------
-const dlg = $("#dlg");
-let curDir = "", parentDir = "";
-async function loadDir(path) {
-  try {
-    const d = await api("/api/fs?path=" + encodeURIComponent(path || ""));
-    curDir = d.path; parentDir = d.parent;
-    $("#curDir").textContent = d.path;
-    $("#up").disabled = !d.parent;
-    const ul = $("#entries"); ul.replaceChildren();
-    if (!d.entries.length) ul.append(el("li", "empty", "No folders or capture files here"));
-    for (const e of d.entries) {
-      const li = el("li");
-      li.append(el("span", "", (e.dir ? "📁 " : "📄 ") + e.name), el("span", "sz", e.dir ? "" : fmtBytes(e.size)));
-      li.onclick = () => {
-        const full = d.path.replace(/[\\/]$/, "") + (d.path.includes("\\") ? "\\" : "/") + e.name;
-        if (e.dir) loadDir(full); else { $("#path").value = full; dlg.close(); refreshButtons(); }
-      };
-      ul.append(li);
-    }
-  } catch (err) { $("#entries").replaceChildren(el("li", "empty", err.message)); }
-}
-$("#browse").onclick = () => {
-  dlg.showModal();
-  const cur = $("#path").value.trim();
-  const dir = cur ? cur.replace(/[\\/][^\\/]*$/, "") : info.cwd;
-  loadDir(dir || info.home);
-};
-$("#up").onclick = () => parentDir && loadDir(parentDir);
-
-// ---------- analysis ----------
-let analysisSource = null; // capture/filter/range the current conversation list was built from
 async function runAnalysis() {
-  $("#statsError").hidden = true;
+  showErr("#statsError", "");
   const src = range();
-  try { await api("/api/stats", { ...src, top: 15 }); analysisSource = src; startPolling(); }
-  catch (e) { showErr("#statsError", e.message); showErr("#replayError", e.message); }
+  if (!src.path) { showErr("#statsError", "Choose a capture file first."); return; }
+  try {
+    await api("/api/stats", { ...src, top: 15 });
+    if (analysisSource && analysisSource.path !== src.path) { rules.length = 0; renderSelection(); } // other file: old picks are meaningless
+    analysisSource = src; convData = null; summaryKey = "";
+    renderConversations();
+    startPolling();
+  } catch (e) { showErr("#statsError", e.message); }
 }
 $("#runStats").onclick = runAnalysis;
+$("#pickAnalyze").onclick = runAnalysis;
 $("#stopStats").onclick = () => api("/api/cancel", {}).catch(() => {});
-
-function showErr(sel, msg) { const e = $(sel); e.textContent = msg; e.hidden = !msg; }
+// Choosing a file (Enter / leaving the field / Browse) analyses it right away.
+$("#path").addEventListener("change", () => { if ($("#path").value.trim() && lastState !== "running") runAnalysis(); });
 
 function bars(container, rows, nameOf, valOf, fmtVal) {
   container.replaceChildren();
@@ -121,62 +96,140 @@ function bars(container, rows, nameOf, valOf, fmtVal) {
   }
 }
 
-function renderSummary(s) {
-  $("#statsResult").hidden = false;
+function renderSummary(s, partial) {
+  $("#overview").hidden = false;
+  const chips = $("#chips"); chips.replaceChildren();
+  const chip = (b, t) => { const c = el("span", "chip"); c.append(el("b", "", b), document.createTextNode(" " + t)); chips.append(c); };
+  chip(fmtInt(s.packets), "packets (" + s.format + ")");
+  chip(fmtBytes(s.capBytes), "captured");
+  if (s.durationSec) chip(fmtDur(s.durationSec), "long");
+  const tot = s.protocols.reduce((a, p) => a + p.packets, 0) || 1;
+  chip(s.protocols.map((p) => p.name + " " + (100 * p.packets / tot).toFixed(0) + "%").join(" · ") || "no IP traffic", "");
+  chip(fmtInt(s.conversationsTotal), "conversations");
+  if (partial) chip("stopped early", "(partial result)");
+
   const k = $("#kpis"); k.replaceChildren();
   const rate = s.durationSec > 0 ? s.wireBytes * 8 / s.durationSec / 1e6 : 0;
-  for (const [v, l] of [
-    [fmtInt(s.packets), "packets (" + s.format + ", link " + s.linkType + ")"], [fmtBytes(s.capBytes), "captured"],
-    [fmtBytes(s.wireBytes), "on the wire"], [s.durationSec ? fmtDur(s.durationSec) : "–", "capture duration"],
-    [rate ? rate.toFixed(2) + " Mbit/s" : "–", "average rate"], [fmtInt(s.truncated), "truncated packets"],
-  ]) { const d = el("div", "kpi"); d.append(el("b", "", v), el("span", "", l)); k.append(d); }
-  const total = s.protocols.reduce((a, p) => a + p.packets, 0) || 1;
-  bars($("#protoBars"), s.protocols, (p) => p.name, (p) => p.packets, (n) => fmtInt(n) + " · " + (100 * n / total).toFixed(1) + "%");
+  for (const [v, l] of [[fmtInt(s.packets), "packets (link " + s.linkType + ")"], [fmtBytes(s.capBytes), "captured"], [fmtBytes(s.wireBytes), "on the wire"],
+    [s.durationSec ? fmtDur(s.durationSec) : "–", "capture duration"], [rate ? rate.toFixed(2) + " Mbit/s" : "–", "average rate"], [fmtInt(s.truncated), "truncated packets"]]) {
+    const d = el("div", "kpi"); d.append(el("b", "", v), el("span", "", l)); k.append(d);
+  }
+  bars($("#protoBars"), s.protocols, (p) => p.name, (p) => p.packets, (n) => fmtInt(n) + " · " + (100 * n / tot).toFixed(1) + "%");
   bars($("#talkers"), s.talkers, (t) => t.addr, (t) => t.bytes, fmtBytes);
   bars($("#tcpPorts"), s.tcpPorts, (p) => String(p.port), (p) => p.packets, (n) => fmtInt(n) + " pkts");
   bars($("#udpPorts"), s.udpPorts, (p) => String(p.port), (p) => p.packets, (n) => fmtInt(n) + " pkts");
   convData = s;
   renderConversations();
-  renderPicker();
 }
 
-// ---------- conversations (analysis) ----------
-let convData = null;
-const MAX_ROWS = 500;
+// ---------- file browser ----------
+const dlg = $("#dlg");
+let parentDir = "";
+async function loadDir(path) {
+  try {
+    const d = await api("/api/fs?path=" + encodeURIComponent(path || ""));
+    parentDir = d.parent;
+    $("#curDir").textContent = d.path;
+    $("#up").disabled = !d.parent;
+    const ul = $("#entries"); ul.replaceChildren();
+    if (!d.entries.length) ul.append(el("li", "empty", "No folders or capture files here"));
+    for (const e of d.entries) {
+      const li = el("li");
+      li.append(el("span", "", (e.dir ? "📁 " : "📄 ") + e.name), el("span", "sz", e.dir ? "" : fmtBytes(e.size)));
+      li.onclick = () => {
+        const full = d.path.replace(/[\\/]$/, "") + (d.path.includes("\\") ? "\\" : "/") + e.name;
+        if (e.dir) loadDir(full);
+        else { $("#path").value = full; dlg.close(); $("#path").dispatchEvent(new Event("change")); refreshUI(); }
+      };
+      ul.append(li);
+    }
+  } catch (err) { $("#entries").replaceChildren(el("li", "empty", err.message)); }
+}
+$("#browse").onclick = () => {
+  dlg.showModal();
+  const cur = $("#path").value.trim();
+  loadDir((cur ? cur.replace(/[\\/][^\\/]*$/, "") : info.cwd) || info.home);
+};
+$("#up").onclick = () => parentDir && loadDir(parentDir);
+
+// ---------- step 2: mode, conversation table, selection ----------
+$$("#modeSeg button").forEach((b) => b.onclick = () => {
+  mode = b.dataset.mode;
+  $$("#modeSeg button").forEach((x) => x.setAttribute("aria-checked", String(x === b)));
+  // A ticked conversation of the other protocol cannot be sent in this mode.
+  const before = rules.length;
+  for (let i = rules.length - 1; i >= 0; i--) if (rules[i].proto !== mode) rules.splice(i, 1);
+  if (mode === "tcp" && rules.length > 1) rules.length = 1;
+  const dropped = before - rules.length;
+  $("#tcpCard").hidden = mode !== "tcp";
+  $("#modeHint").textContent = mode === "tcp"
+    ? "TCP opens a real connection and replays ONE conversation's client side (the one you tick, or the first match). Replies from the server are handled live."
+    : "UDP injects the recorded datagrams as they are. Tick any number of UDP conversations, or none to send all of them.";
+  renderConversations(); renderSelection();
+  if (dropped) $("#convNote").textContent = "Unticked " + plural(dropped, "conversation") + " that " + mode.toUpperCase() + " mode cannot send.";
+  refreshUI();
+});
+
+const ruleIndex = (sel) => rules.findIndex((r) => r.selector === sel);
 
 function renderConversations() {
   const s = convData, tb = $("#convTable tbody");
   tb.replaceChildren();
-  if (!s || !s.conversations) { $("#convCard").hidden = true; return; }
-  $("#convCard").hidden = false;
+  const analyzing = lastState === "running" && lastKind === "stats";
+  $("#noAnalysis").hidden = !!(s && s.conversations);
+  $("#convBox").hidden = !(s && s.conversations);
+  if (!$("#noAnalysis").hidden) {
+    $("#noAnalysis").querySelector("p").textContent = analyzing ? "Analyzing the capture…" : "No conversation list yet.";
+    $("#pickAnalyze").disabled = analyzing || lastState === "running" || !$("#path").value.trim();
+    return;
+  }
+  const cur = range(), a = analysisSource;
+  const stale = $("#pickStale");
+  stale.hidden = !(a && (cur.path !== a.path || cur.filter !== a.filter || cur.start !== a.start || cur.count !== a.count));
+  if (!stale.hidden) stale.textContent = "This list comes from an earlier analysis: the capture, filter or packet range has changed since. Click Analyze (step 1) to refresh it.";
+
+  const want = mode === "tcp" ? ["tcp"] : mode === "udp" ? ["udp"] : ["tcp", "udp"];
   const q = $("#convSearch").value.trim().toLowerCase();
-  const rows = s.conversations.filter((c) => !q || (c.selector + " " + c.state).toLowerCase().includes(q));
-  $("#convCount").textContent = "(" + fmtInt(s.conversationsTotal) + " tracked" + (q ? ", " + fmtInt(rows.length) + " match" : "") + ")";
+  const sendable = s.conversations.filter((c) => c.proto === "tcp" || c.proto === "udp");
+  const all = sendable.filter((c) => want.includes(c.proto));
+  const rows = all.filter((c) => !q || (c.selector + " " + c.state).toLowerCase().includes(q));
+  $("#convCount").textContent = fmtInt(rows.length) + (q ? " of " + fmtInt(all.length) : "") + " " + (mode ? mode.toUpperCase() + " " : "") + "conversations";
+
   for (const c of rows.slice(0, MAX_ROWS)) {
-    const tr = el("tr");
+    const on = ruleIndex(c.selector) >= 0;
+    const tr = el("tr", on ? "on" : "");
+    const cb = el("input"); cb.type = "checkbox"; cb.checked = on; cb.setAttribute("aria-label", "Replay " + c.selector);
+    cb.onclick = (e) => e.stopPropagation();
+    cb.onchange = () => toggleConversation(c.selector, cb.checked);
+    const ck = el("td", "chk"); ck.append(cb);
     const proto = el("td"); proto.append(el("span", "tag", c.proto));
-    const isPorts = c.proto === "tcp" || c.proto === "udp";
-    const ep = (ip, port) => isPorts ? (ip.includes(":") ? "[" + ip + "]:" + port : ip + ":" + port) : ip;
-    const btn = el("button", "small", ruleIndex(c.selector) >= 0 ? "Edit in Replay →" : "＋ Replay…");
-    btn.type = "button";
-    btn.onclick = () => { addRule(c.selector); selectTab("replay"); };
-    const act = el("td"); act.append(btn);
-    tr.append(proto, el("td", "mono", ep(c.clientIp, c.clientPort)), el("td", "mono", ep(c.serverIp, c.serverPort)),
+    tr.onclick = () => cb.click();
+    tr.append(ck, proto, el("td", "mono", endpoint(c.proto, c.clientIp, c.clientPort)), el("td", "mono", endpoint(c.proto, c.serverIp, c.serverPort)),
       el("td", "num", fmtInt(c.packets) + "  (" + fmtInt(c.c2sPackets) + " / " + fmtInt(c.s2cPackets) + ")"),
-      el("td", "num", fmtBytes(c.bytes)), el("td", "num", c.durationSec ? fmtDur(c.durationSec) : "–"), el("td", "", c.state), act);
+      el("td", "num", fmtBytes(c.bytes)), el("td", "num", c.durationSec ? fmtDur(c.durationSec) : "–"), el("td", "", c.proto === "tcp" ? c.state : "–"));
     tb.append(tr);
   }
+  if (!rows.length) { const tr = el("tr"); const td = el("td", "empty", all.length ? "No conversation matches the filter." : "No " + want.join("/").toUpperCase() + " conversations in this capture."); td.colSpan = 8; tr.append(td); tb.append(tr); }
+
   const notes = [];
-  if (rows.length > MAX_ROWS) notes.push("Showing the " + MAX_ROWS + " largest of " + fmtInt(rows.length) + " matches: refine the filter to see others.");
-  if (s.conversationsTotal > s.conversations.length) notes.push("The table lists the " + fmtInt(s.conversations.length) + " largest conversations by bytes (" + fmtInt(s.conversationsTotal) + " tracked).");
-  if (s.conversationsUntracked > 0) notes.push(fmtInt(s.conversationsUntracked) + " packets belong to further conversations beyond the tracking limit and are not listed.");
-  notes.push("Client = the side that opened the conversation (SYN sender; otherwise first packet, or the well-known port's peer). → / ← are client→server and server→client packets.");
+  if (rows.length > MAX_ROWS) notes.push("Showing the " + MAX_ROWS + " largest of " + fmtInt(rows.length) + " matches: refine the search to see others.");
+  if (s.conversationsTotal > s.conversations.length) notes.push("Listing the " + fmtInt(s.conversations.length) + " largest of " + fmtInt(s.conversationsTotal) + " conversations (by bytes).");
+  if (s.conversationsUntracked > 0) notes.push(fmtInt(s.conversationsUntracked) + " packets belong to conversations beyond the tracking limit.");
+  const hidden = s.conversations.length - sendable.length;
+  if (hidden > 0) notes.push(plural(hidden, "ICMP/other conversation") + " hidden: only TCP and UDP can be replayed.");
+  notes.push("Client = the side that opened the conversation. → / ← = client→server / server→client packets.");
   $("#convNote").textContent = notes.join(" ");
+  $("#selAll").disabled = mode === "tcp" || !rows.length;
 }
 $("#convSearch").addEventListener("input", renderConversations);
-
-// ---------- per-conversation rules (replay) ----------
-const rules = [];
+$("#pickClear").onclick = () => { rules.length = 0; renderConversations(); renderSelection(); refreshUI(); };
+$("#selAll").onclick = () => {
+  const q = $("#convSearch").value.trim().toLowerCase();
+  const rows = (convData ? convData.conversations : []).filter((c) => (!mode || c.proto === mode) && (c.proto === "tcp" || c.proto === "udp") &&
+    (!q || (c.selector + " " + c.state).toLowerCase().includes(q))).slice(0, MAX_ROWS);
+  for (const c of rows) if (ruleIndex(c.selector) < 0) addRuleObj(c.selector);
+  renderConversations(); renderSelection(); refreshUI();
+};
 
 function splitEndpoint(proto, s) {
   if (proto !== "tcp" && proto !== "udp") return { ip: s, port: 0 };
@@ -189,145 +242,83 @@ function parseSelector(sel) {
   const proto = p[0].toLowerCase(), c = splitEndpoint(proto, p[1]), s = splitEndpoint(proto, p[2]);
   return c && s ? { selector: proto + "/" + p[1] + "/" + p[2], proto, client: c, server: s } : null;
 }
-const ruleIndex = (sel) => rules.findIndex((r) => r.selector === sel);
-
-function addRule(sel) {
+function addRuleObj(sel) {
   const p = parseSelector(sel);
   if (!p) return false;
-  if (ruleIndex(p.selector) < 0) rules.push({ ...p, clientIp: "", clientPort: "", serverIp: "", serverPort: "", replace: "" });
-  renderRules();
-  renderConversations();
+  if (ruleIndex(p.selector) < 0) {
+    if (mode === "tcp") rules.length = 0; // TCP replays exactly one conversation: ticking another replaces it
+    rules.push({ ...p, clientIp: "", clientPort: "", serverIp: "", serverPort: "", replace: "", open: false });
+  }
   return true;
 }
-
-function fmtEp(proto, ip, port) {
-  if (proto !== "tcp" && proto !== "udp") return ip;
-  return (ip.includes(":") ? "[" + ip + "]" : ip) + ":" + port;
+function toggleConversation(sel, on) {
+  if (on) addRuleObj(sel);
+  else { const i = ruleIndex(sel); if (i >= 0) rules.splice(i, 1); }
+  renderConversations(); renderSelection(); refreshUI();
 }
 
-function renderRules() {
+const changed = (r) => !!(r.clientIp || r.clientPort || r.serverIp || r.serverPort || r.replace.trim());
+
+function renderSelection() {
   const box = $("#ruleList");
   box.replaceChildren();
-  rules.forEach((r, i) => {
+  rules.forEach((r) => {
     const hasPorts = r.proto === "tcp" || r.proto === "udp";
-    const card = el("div", "rule");
-    const head = el("div", "rule-head");
-    head.append(el("span", "tag", r.proto), el("span", "sel", r.selector));
-    const rm = el("button", "small", "Remove"); rm.type = "button";
-    rm.onclick = () => { rules.splice(i, 1); renderRules(); renderConversations(); };
-    head.append(rm);
+    const card = el("details", "rule"); card.open = r.open;
+    card.addEventListener("toggle", () => { r.open = card.open; });
+    const head = el("summary");
+    const chg = el("span", "chg");
+    const rm = el("button", "small", "Untick"); rm.type = "button";
+    rm.onclick = (e) => { e.preventDefault(); e.stopPropagation(); toggleConversation(r.selector, false); };
+    head.append(el("span", "tag", r.proto), el("span", "sel", r.selector), chg, rm);
+
+    const body = el("div", "body");
     const grid = el("div", "grid4");
     const preview = el("div", "preview");
     const field = (label, key, placeholder, type) => {
       const l = el("label", "", label); const inp = el("input"); inp.type = type; inp.value = r[key]; inp.placeholder = placeholder;
       if (type === "number") { inp.min = "0"; inp.max = "65535"; } else inp.spellcheck = false;
-      inp.oninput = () => { r[key] = inp.value.trim(); updatePreview(); };
+      inp.oninput = () => { r[key] = inp.value.trim(); update(); };
       l.append(inp); return l;
     };
     grid.append(field("Client IP", "clientIp", r.client.ip, "text"));
     if (hasPorts) grid.append(field("Client port", "clientPort", String(r.client.port), "number"));
     grid.append(field("Server IP", "serverIp", r.server.ip, "text"));
     if (hasPorts) grid.append(field("Server port", "serverPort", String(r.server.port), "number"));
-    const det = el("details"); det.append(el("summary", "", "Payload substitutions for this conversation"));
+    const det = el("details"); det.append(el("summary", "muted", "Change the payload of this conversation"));
     const ta = el("textarea"); ta.rows = 2; ta.spellcheck = false; ta.placeholder = "old=>new (one per line)"; ta.value = r.replace;
-    ta.oninput = () => { r.replace = ta.value; };
+    ta.oninput = () => { r.replace = ta.value; update(); };
     det.append(ta); if (r.replace) det.open = true;
-    function updatePreview() {
-      const cIp = r.clientIp || r.client.ip, sIp = r.serverIp || r.server.ip;
-      const cPort = r.clientPort || r.client.port, sPort = r.serverPort || r.server.port;
-      const changed = r.clientIp || r.clientPort || r.serverIp || r.serverPort;
-      preview.replaceChildren(document.createTextNode("replays as  "));
-      const b = el(changed ? "b" : "span", "", fmtEp(r.proto, cIp, cPort) + "  ⇄  " + fmtEp(r.proto, sIp, sPort));
-      preview.append(b, document.createTextNode(changed ? "   (server replies come FROM the new server address)" : "   (unchanged)"));
+    function update() {
+      const cIp = r.clientIp || r.client.ip, sIp = r.serverIp || r.server.ip, cPort = r.clientPort || r.client.port, sPort = r.serverPort || r.server.port;
+      const ch = changed(r);
+      chg.textContent = ch ? "modified" : "unchanged"; chg.className = "chg" + (ch ? " on" : "");
+      preview.replaceChildren(document.createTextNode("sent as  "));
+      preview.append(el(ch ? "b" : "span", "", endpoint(r.proto, cIp, cPort) + "  ⇄  " + endpoint(r.proto, sIp, sPort)),
+        document.createTextNode(ch ? "   (replies come FROM the new server address)" : "   (exactly as recorded)"));
+      refreshUI();
     }
-    updatePreview();
-    card.append(head, grid, preview, det);
+    update();
+    body.append(grid, preview, det);
+    card.append(head, body);
     box.append(card);
   });
+  $("#selTitle").textContent = rules.length ? "Selected conversations (" + rules.length + ")" : "Selected conversations";
   $("#convEmpty").hidden = rules.length > 0;
-  renderPicker();
-  const badge = $("#ruleBadge"); badge.hidden = rules.length === 0; badge.textContent = String(rules.length);
-  updateOnly();
-  refreshButtons();
+  $("#convEmpty").textContent = mode === "tcp"
+    ? "None ticked: TCP will replay the first conversation that matches the filter. Tick one in the list to choose."
+    : "None ticked: every conversation of the chosen mode in the capture will be sent exactly as recorded.";
+  $("#alsoRow").hidden = !(rules.length > 0 && mode !== "tcp");
 }
-
-// ---------- pick conversations from the analysis ----------
-function toggleConversation(c, on) {
-  if (on) {
-    if (mode === "tcp") rules.length = 0; // TCP replays exactly one conversation
-    addRule(c.selector);
-  } else {
-    const i = ruleIndex(c.selector);
-    if (i >= 0) rules.splice(i, 1);
-    renderRules(); renderConversations();
-  }
-}
-
-function renderPicker() {
-  const list = $("#pickList"), keep = list.scrollTop;
-  list.replaceChildren();
-  const s = convData;
-  const analyzing = lastState === "running" && lastKind === "stats";
-  $("#pickAnalyze").disabled = lastState === "running" || !$("#path").value.trim();
-  $("#pickAnalyze").textContent = s ? "Re-analyze capture" : "Analyze capture";
-  $("#pickClear").disabled = rules.length === 0;
-
-  const cur = range(), a = analysisSource;
-  const stale = $("#pickStale");
-  stale.hidden = !(s && a && (cur.path !== a.path || cur.filter !== a.filter || cur.start !== a.start || cur.count !== a.count));
-  if (!stale.hidden) stale.textContent = "This list comes from an earlier analysis: the capture, filter or packet range has changed since. Re-analyze to refresh it.";
-
-  if (!s || !s.conversations) {
-    $("#pickEmpty").textContent = analyzing ? "Analyzing the capture…" : "No analysis yet: analyze the capture to list its conversations here.";
-    $("#pickCount").textContent = ""; $("#pickNote").textContent = "";
-    list.hidden = true;
-    return;
-  }
-  list.hidden = false;
-  $("#pickEmpty").textContent = "";
-  const want = mode === "tcp" ? ["tcp"] : mode === "udp" ? ["udp"] : ["tcp", "udp"];
-  const q = $("#pickSearch").value.trim().toLowerCase();
-  const all = s.conversations.filter((c) => want.includes(c.proto));
-  const rows = all.filter((c) => !q || (c.selector + " " + c.state).toLowerCase().includes(q));
-  $("#pickCount").textContent = "(" + fmtInt(rows.length) + (q ? " of " + fmtInt(all.length) : "") + ")";
-  $("#pickNote").textContent = mode === "tcp" ? "TCP mode replays one conversation: ticking another replaces the selection."
-    : mode === "udp" ? "Showing UDP conversations only (the only ones UDP mode replays)."
-    : "Choose TCP or UDP above to show just the conversations that mode can replay (ICMP/ARP are never replayed).";
-  if (!rows.length) { list.append(el("li", "none", all.length ? "No conversation matches the filter." : "This capture has no " + want.join("/").toUpperCase() + " conversations.")); return; }
-  for (const c of rows.slice(0, 300)) {
-    const li = el("li", ruleIndex(c.selector) >= 0 ? "on" : "");
-    const cb = el("input"); cb.type = "checkbox"; cb.checked = ruleIndex(c.selector) >= 0;
-    cb.onclick = (e) => e.stopPropagation();
-    cb.onchange = () => toggleConversation(c, cb.checked);
-    li.onclick = () => cb.click();
-    const ep = (ip, p) => ip.includes(":") ? "[" + ip + "]:" + p : ip + ":" + p;
-    li.append(cb, el("span", "tag", c.proto), el("span", "ends", ep(c.clientIp, c.clientPort) + "  →  " + ep(c.serverIp, c.serverPort)),
-      el("span", "meta", fmtInt(c.packets) + " pkts · " + fmtBytes(c.bytes) + (c.proto === "tcp" ? " · " + c.state : "")));
-    list.append(li);
-  }
-  list.scrollTop = keep;
-}
-$("#pickSearch").addEventListener("input", renderPicker);
-$("#pickAnalyze").onclick = runAnalysis;
-$("#pickClear").onclick = () => { rules.length = 0; renderRules(); renderConversations(); };
-for (const id of ["#path", "#filter", "#start", "#count"]) $(id).addEventListener("input", renderPicker);
 
 $("#addSelector").onclick = () => {
   const v = $("#selectorIn").value.trim();
   if (!v) return;
-  if (addRule(v)) { $("#selectorIn").value = ""; $("#selectorErr").textContent = ""; }
-  else { $("#selectorErr").textContent = "Expected proto/client/server, e.g. tcp/192.168.1.50:51234/192.168.1.10:80 or icmp/10.0.0.1/10.0.0.2"; $("#selectorErr").style.color = "var(--err)"; }
+  const e = $("#selectorErr");
+  if (addRuleObj(v)) { $("#selectorIn").value = ""; e.textContent = ""; renderConversations(); renderSelection(); refreshUI(); }
+  else { e.textContent = "Expected proto/client/server, e.g. tcp/192.168.1.50:51234/192.168.1.10:80"; e.style.color = "var(--err)"; }
 };
 $("#selectorIn").addEventListener("keydown", (e) => { if (e.key === "Enter") $("#addSelector").click(); });
-
-function updateOnly() {
-  const cb = $("#onlyListed"), tcp = mode === "tcp";
-  cb.disabled = tcp || rules.length === 0;
-  if (tcp) cb.checked = rules.length > 0;
-  $("#onlyListedText").textContent = tcp
-    ? "TCP mode replays a single conversation: the listed one (or the first matching conversation if none is listed)"
-    : "Replay only the listed conversations (skip all others)";
-}
 
 function ruleBody() {
   return rules.map((r) => ({
@@ -337,25 +328,29 @@ function ruleBody() {
   }));
 }
 
-// ---------- replay form ----------
-$$("#modeSeg button").forEach((b) => b.onclick = () => {
-  mode = b.dataset.mode;
-  $$("#modeSeg button").forEach((x) => x.setAttribute("aria-checked", String(x === b)));
-  $("#tcpCard").hidden = mode !== "tcp";
-  // A listed conversation of the other protocol cannot be replayed in this mode.
-  const before = rules.length;
-  for (let i = rules.length - 1; i >= 0; i--) if (rules[i].proto !== mode) rules.splice(i, 1);
-  const dropped = before - rules.length;
-  renderRules(); // also refreshes the picker, the "only listed" box and the buttons
-  renderConversations();
-  if (dropped) $("#pickNote").textContent = "Removed " + dropped + " listed conversation" + (dropped > 1 ? "s" : "") + " that " + mode.toUpperCase() + " mode cannot replay.";
-});
+// ---------- step 3: settings ----------
 function paceVisibility() {
   const m = $("#paceMode").value;
   $$("[data-pace]").forEach((l) => l.hidden = l.dataset.pace !== m);
 }
 $("#paceMode").onchange = paceVisibility;
 paceVisibility();
+
+function pacingText() {
+  const m = $("#paceMode").value, f = (id) => parseFloat($(id).value) || 0;
+  const loop = Math.max(1, parseInt($("#loop").value || "1", 10) || 1);
+  let t = "at original timing";
+  if (m === "original") { const sp = f("#speed"); if (sp && sp !== 1) t = "at " + sp + "× the original speed"; }
+  else if (m === "fixed") t = "one packet every " + ($("#delay").value.trim() || "?");
+  else if (m === "pps") t = "at " + fmtInt(f("#pps")) + " packets/s";
+  else if (m === "mbps") t = "at " + f("#mbps") + " Mbit/s";
+  else if (m === "burst") t = "at line rate";
+  return t + (loop > 1 ? ", " + loop + " passes" : "");
+}
+
+function globalRewriteActive() {
+  return ["#srcIp", "#dstIp", "#payload"].some((id) => $(id).value.trim()) || ["#srcPort", "#dstPort"].some((id) => Number($(id).value) > 0) || $("#replace").value.trim() !== "";
+}
 
 function replayBody() {
   const num = (id) => parseInt($(id).value || "0", 10) || 0;
@@ -369,8 +364,90 @@ function replayBody() {
     ifIndex: num("#ifIndex"), noFirewall: $("#noFirewall").checked,
     seqOffset: num("#seqOffset"), skipBytes: num("#skipBytes"), ackMode: $("#ackMode").value, handshakeTimeout: $("#handshakeTimeout").value,
     record: $("#record").value.trim(), recordRx: $("#recordRx").checked,
-    conversations: ruleBody(), onlyConversations: $("#onlyListed").checked && rules.length > 0,
+    conversations: ruleBody(), onlyConversations: rules.length > 0 && (mode === "tcp" || !$("#alsoOthers").checked),
   };
+}
+
+// ---------- step 4: summary, button state, status ----------
+function buildSummary() {
+  const box = $("#sendSummary"); box.replaceChildren();
+  const add = (t) => box.append(document.createTextNode(t));
+  const bold = (t) => box.append(el("b", "", t));
+  const path = $("#path").value.trim();
+  if (!path) { add("Open a capture in step 1 to begin."); return; }
+  if (!mode) { add("Next: choose "); bold("TCP or UDP"); add(" in step 2."); return; }
+  const M = mode.toUpperCase();
+  add("Send ");
+  if (rules.length) {
+    bold(plural(rules.length, M + " conversation"));
+    const n = rules.filter(changed).length;
+    add(n ? " (" + n + " modified)" : " exactly as recorded");
+    if (mode !== "tcp" && $("#alsoOthers").checked) add(", plus all the others unchanged");
+  } else if (mode === "tcp") { add("the "); bold("first matching TCP conversation"); }
+  else bold("all UDP traffic");
+  add(" from "); bold(baseName(path));
+  if ($("#filter").value.trim()) add(" (filtered)");
+  add(", " + pacingText() + ", ");
+  add($("#backend").value === "null" ? "as a dry run: nothing leaves this machine" : "via raw injection onto the network");
+  const rec = $("#record").value.trim();
+  if (rec) add(", recording to " + baseName(rec));
+  add(".");
+  if (globalRewriteActive() && (!rules.length || (mode !== "tcp" && $("#alsoOthers").checked))) {
+    const w = el("div", "hint warnbox", "Rewrite-every-packet (step 3) is active: it changes every packet that is not individually ticked, including server replies.");
+    box.append(w);
+  }
+}
+
+function refreshUI() {
+  const running = lastState === "running";
+  const hasPath = !!$("#path").value.trim();
+  // range summary
+  const r = range(); const parts = [];
+  if (r.filter.trim()) parts.push("filtered");
+  if (r.start) parts.push("from packet " + fmtInt(r.start));
+  if (r.count) parts.push("max " + fmtInt(r.count));
+  $("#rangeSummary").textContent = parts.length ? "(" + parts.join(", ") + ")" : "(everything)";
+  // settings one-liners
+  $("#pacingSum").textContent = pacingText();
+  $("#backendSum").textContent = $("#backend").value === "null" ? "dry run" : "raw injection";
+  $("#recSum").textContent = $("#record").value.trim() ? baseName($("#record").value.trim()) : "(off)";
+  $("#tcpSum").textContent = [$("#skipBytes").value > 0 ? "skip " + $("#skipBytes").value + " B" : "", Number($("#seqOffset").value) ? "seq offset " + $("#seqOffset").value : ""].filter(Boolean).join(", ");
+  // buttons
+  $("#runStats").disabled = !hasPath || running;
+  $("#pickAnalyze").disabled = !hasPath || running;
+  const tooMany = mode === "tcp" && rules.length > 1;
+  const ready = hasPath && !!mode && !tooMany;
+  $("#runReplay").disabled = !ready || running;
+  const hint = $("#startHint");
+  if (!hasPath) hint.textContent = "";
+  else if (!mode) hint.textContent = "Choose TCP or UDP in step 2: the transmission mode is never guessed.";
+  else if (tooMany) hint.textContent = "TCP mode replays a single conversation: untick the others.";
+  else if (info.elevated === false && $("#backend").value !== "null") hint.textContent = "Raw injection needs Administrator/root. Start pktreplay elevated, or choose Dry run in step 3.";
+  else hint.textContent = "";
+  buildSummary();
+  renderSteps();
+}
+
+function renderSteps() {
+  const set = (id, cls, text) => { const a = document.querySelector('a[data-step="' + id + '"]'); a.classList.toggle("done", cls === "done"); $("#st-" + id).textContent = text; };
+  const analyzing = lastState === "running" && lastKind === "stats";
+  set("s1", convData ? "done" : "", analyzing ? "analyzing…" : convData ? fmtInt(convData.conversationsTotal) + " conversations" : "");
+  set("s2", mode ? "done" : "", mode ? mode.toUpperCase() + (rules.length ? " · " + rules.length + " ticked" : " · all") : "");
+  set("s3", "", "");
+  const replayed = lastKind === "replay";
+  set("s4", replayed && lastState === "done" ? "done" : "", replayed ? lastState : "");
+}
+
+// scroll spy for steps 1-3 (step 4 is always on screen on wide layouts)
+if ("IntersectionObserver" in window) {
+  const links = Object.fromEntries($$(".steps a").map((a) => [a.dataset.step, a]));
+  const visible = new Set();
+  const io = new IntersectionObserver((ents) => {
+    for (const e of ents) e.isIntersecting ? visible.add(e.target.id) : visible.delete(e.target.id);
+    const cur = ["s1", "s2", "s3"].find((id) => visible.has(id));
+    Object.entries(links).forEach(([id, a]) => a.classList.toggle("active", id === cur));
+  }, { rootMargin: "-20% 0px -55% 0px" });
+  ["s1", "s2", "s3"].forEach((id) => io.observe($("#" + id)));
 }
 
 $("#runReplay").onclick = async () => {
@@ -380,23 +457,6 @@ $("#runReplay").onclick = async () => {
 };
 $("#stopReplay").onclick = () => api("/api/cancel", {}).catch(() => {});
 
-function refreshButtons() {
-  const running = lastState === "running";
-  const tooMany = mode === "tcp" && rules.length > 1;
-  const ready = !!$("#path").value.trim() && !!mode && !tooMany;
-  $("#runReplay").disabled = !ready || running;
-  $("#runStats").disabled = !$("#path").value.trim() || running;
-  const hint = $("#startHint");
-  if (!$("#path").value.trim()) hint.textContent = "Choose a capture file first.";
-  else if (!mode) hint.textContent = "Select TCP or UDP above: the transmission mode is never guessed.";
-  else if (tooMany) hint.textContent = "TCP mode replays a single conversation: remove all but one from the list.";
-  else if (mode === "tcp" && rules.length === 0) hint.textContent = "No conversation chosen: TCP will replay the first one that matches the filter. Tick one in the conversation list to choose.";
-  else if (info.elevated === false && $("#backend").value !== "null") hint.textContent = "Raw injection needs elevated privileges; start pktreplay as Administrator/root, or use Dry run.";
-  else hint.textContent = "Ready.";
-}
-$("#backend").onchange = refreshButtons;
-
-// ---------- status polling ----------
 function startPolling() {
   clearInterval(poller);
   poller = setInterval(poll, 400);
@@ -410,48 +470,53 @@ async function poll() {
   const running = s.state === "running";
   const isStats = s.kind === "stats", isReplay = s.kind === "replay";
 
-  // analysis panel
-  $("#runStats").hidden = isStats && running; $("#stopStats").hidden = !(isStats && running);
-  $("#statsProgress").hidden = !(isStats && s.scan);
+  // step 1: analysis progress
+  $("#stopStats").hidden = !(isStats && running);
+  $("#runStats").hidden = isStats && running;
+  $("#statsProgress").hidden = !(isStats && s.scan && (running || s.state === "cancelled"));
   if (isStats && s.scan) {
     $("#statsBar").style.width = s.scan.percent.toFixed(1) + "%";
     $("#statsProgText").textContent = fmtInt(s.scan.packets) + " packets · " + fmtBytes(s.scan.bytes) + (s.scan.total ? " of " + fmtBytes(s.scan.total) : "") + " · " + fmtDur(s.elapsedSec);
   }
   if (isStats) {
     showErr("#statsError", s.state === "failed" ? s.error : "");
-    if (s.summary) renderSummary(s.summary);
+    const key = s.kind + "|" + s.elapsedSec + "|" + (s.summary ? s.summary.packets : "");
+    if (s.summary && !running && key !== summaryKey) { summaryKey = key; renderSummary(s.summary, s.state === "cancelled"); }
   }
 
-  // replay panel
+  // step 4: live replay status
   $("#runReplay").hidden = isReplay && running; $("#stopReplay").hidden = !(isReplay && running);
   const pill = $("#pill"); pill.textContent = isReplay ? s.state : "idle"; pill.className = "pill " + (isReplay ? s.state : "");
   if (isReplay) {
     showErr("#replayError", s.state === "failed" ? s.error : "");
-    const r = s.replay;
-    const g = $("#liveGrid"); g.replaceChildren();
+    const r = s.replay, g = $("#liveGrid"); g.replaceChildren();
     if (r) for (const [v, l] of [[fmtInt(r.sent), "packets sent"], [fmtBytes(r.bytes), "bytes sent"], [fmtInt(r.pps) + " pps", "rate"], [r.mbps.toFixed(2) + " Mbit/s", "throughput"],
       [fmtInt(r.read), "read from file"], [fmtInt(r.skipped), "skipped"], [fmtInt(r.sendErrs), "send errors"], [fmtDur(s.elapsedSec), "elapsed"]]) {
       const d = el("div"); d.append(el("b", "", v), el("span", "", l)); g.append(d);
     }
-    const ti = $("#tcpInfo");
-    ti.hidden = !s.tcp; ti.replaceChildren();
+    const ti = $("#tcpInfo"); ti.hidden = !s.tcp; ti.replaceChildren();
     if (s.tcp) for (const [k, v] of [["Flow", s.tcp.flow], ["Live source", s.tcp.localIp + ":" + s.tcp.localPort],
       ["Handshake", s.tcp.handshakeUs ? s.tcp.handshakeUs.toFixed(0) + " µs" : "–"], ["Retransmits", String(s.tcp.retransmits)],
       ["Server sent", fmtBytes(s.tcp.rxBytes) + " / " + s.tcp.rxSegments + " segs"], ["Ended", s.tcp.finalState || "–"]]) {
       const d = el("div"); d.append(el("span", "", k), el("span", "mono", v)); ti.append(d);
     }
-    const ri = $("#recInfo");
-    ri.hidden = !s.recording; ri.replaceChildren();
+    const ri = $("#recInfo"); ri.hidden = !s.recording; ri.replaceChildren();
     if (s.recording) for (const [k, v] of [["Recording", s.recording.path], ["Packets", fmtInt(s.recording.packets)], ["Bytes", fmtBytes(s.recording.bytes)]]) {
       const d = el("div"); d.append(el("span", "", k), el("span", "mono", v)); ri.append(d);
     }
     const log = $("#log"), atEnd = log.scrollTop + log.clientHeight >= log.scrollHeight - 8;
-    log.textContent = s.log.join("\n");
+    log.hidden = !s.log.length; log.textContent = s.log.join("\n");
     if (atEnd) log.scrollTop = log.scrollHeight;
   }
-  refreshButtons();
+  renderConversations();
+  refreshUI();
   if (!running) { clearInterval(poller); poller = null; }
 }
+
+// any form edit updates the summary and button state
+document.addEventListener("input", refreshUI);
+document.addEventListener("change", refreshUI);
+for (const id of ["#path", "#filter", "#start", "#count"]) $(id).addEventListener("input", renderConversations);
 
 // ---------- init ----------
 (async function init() {
@@ -461,8 +526,8 @@ async function poll() {
     const b = $("#elev");
     b.textContent = info.elevated ? "Elevated: raw injection available" : "Not elevated: dry run / analysis only";
     b.className = "badge " + (info.elevated ? "ok" : "warn");
+    if (!info.elevated) $("#backend").value = "null"; // raw injection would just fail without privileges
   } catch (e) { showErr("#statsError", e.message); }
-  refreshButtons();
-  renderPicker();
+  renderConversations(); renderSelection(); refreshUI();
   poll(); // pick up a job that is already running (page reload)
 })();
