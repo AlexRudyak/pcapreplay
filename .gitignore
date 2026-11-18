@@ -1,0 +1,9 @@
+/bin/
+*.exe
+*.test
+*.out
+*.pcap
+*.pcapng
+*.idx
+WinDivert*.dll
+WinDivert*.sys
