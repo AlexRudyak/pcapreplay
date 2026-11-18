@@ -43,6 +43,14 @@ func KeyOf(in *decode.Info) (k Key, ok bool) {
 	return k, true
 }
 
+// MakeKey builds the canonical key for two endpoints.
+func MakeKey(proto uint8, a, b netip.AddrPort) Key {
+	if cmpEndpoint(a, b) > 0 {
+		a, b = b, a
+	}
+	return Key{Proto: proto, A: a, B: b}
+}
+
 func portOf(in *decode.Info, src bool) uint16 {
 	if !in.HasPorts {
 		return 0

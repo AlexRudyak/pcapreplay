@@ -36,6 +36,7 @@ type fakeServer struct {
 	data                   []byte
 	seqs                   []uint32
 	lastAck, lastDataAck   uint32
+	synSrc, synDst         netip.AddrPort
 	finSeen                bool
 }
 
@@ -77,6 +78,7 @@ func (f *fakeServer) SendBatch(pkts [][]byte) (int, error) {
 		switch {
 		case in.Flags&decode.SYN != 0:
 			f.syns++
+			f.synSrc, f.synDst = netip.AddrPortFrom(in.Src, in.SrcPort), netip.AddrPortFrom(in.Dst, in.DstPort)
 			if f.silent {
 				continue
 			}

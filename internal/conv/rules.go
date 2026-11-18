@@ -98,6 +98,17 @@ func (s *Set) Rules() []*Rule {
 	return s.order
 }
 
+// ForKey returns the rule for a conversation key, or nil.
+func (s *Set) ForKey(k Key) *Rule {
+	if s == nil {
+		return nil
+	}
+	if e := s.rules[k]; e != nil {
+		return e.rule
+	}
+	return nil
+}
+
 // Lookup finds the rule for a decoded packet and its rewrite for the packet's
 // direction. rule is nil when the packet's conversation has no rule.
 func (s *Set) Lookup(in *decode.Info) (rule *Rule, rw *mutate.Rewrite) {

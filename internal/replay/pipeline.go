@@ -14,6 +14,7 @@ import (
 	"time"
 
 	"github.com/sasha/pktreplay/internal/backend"
+	"github.com/sasha/pktreplay/internal/conv"
 	"github.com/sasha/pktreplay/internal/decode"
 	"github.com/sasha/pktreplay/internal/filter"
 	"github.com/sasha/pktreplay/internal/mutate"
@@ -53,8 +54,46 @@ type Config struct {
 	QueueSize int // bounded queue depth between producer and sender (default 4096)
 	Batch     int // max packets per SendBatch in burst mode (default 64)
 
+	// Conversations holds per-conversation rewrite rules. A rule changes the
+	// endpoints of exactly one conversation, consistently in both directions,
+	// and replaces the global Rewrite IP/port fields for that conversation.
+	// Conversations without a rule are replayed unchanged apart from the global
+	// Rewrite (which, as before, applies to every packet).
+	Conversations []conv.Rule
+	// OnlyConversations replays just the conversations that have a rule. In TCP
+	// mode (which replays a single conversation) it is implied by having rules.
+	OnlyConversations bool
+	convSet           *conv.Set
+
 	// TCP mode.
 	TCP TCPConfig
+}
+
+// prepare compiles the conversation rules.
+func (c *Config) prepare() error {
+	set, err := conv.NewSet(c.Conversations)
+	if err != nil {
+		return err
+	}
+	c.convSet = set
+	return nil
+}
+
+// onlyRuled reports whether packets of conversations without a rule are dropped.
+func (c *Config) onlyRuled(proto uint8) bool {
+	return c.convSet.Len() > 0 && (c.OnlyConversations || proto == decode.ProtoTCP)
+}
+
+// pick chooses the rewrite for one packet. ok is false when the packet must not
+// be replayed (it belongs to a conversation without a rule in only-rules mode).
+func (c *Config) pick(in *decode.Info) (rw *mutate.Rewrite, ok bool) {
+	if rule, r := c.convSet.Lookup(in); rule != nil {
+		return r, true
+	}
+	if c.onlyRuled(in.Proto) {
+		return nil, false
+	}
+	return &c.Rewrite, true
 }
 
 // Counters are updated atomically and may be sampled while a run is active.
@@ -96,9 +135,9 @@ type item struct {
 // feedOpts specialises the producer for a transport.
 type feedOpts struct {
 	proto    uint8
-	accept   func(*decode.Info) bool // extra per-packet test (e.g. flow tuple); may be nil
-	rewrite  *mutate.Rewrite         // applied by the producer; nil = none
-	finalize bool                    // repair lengths/checksums before queueing
+	accept   func(*decode.Info) bool                    // extra per-packet test (e.g. flow tuple); may be nil
+	pick     func(*decode.Info) (*mutate.Rewrite, bool) // rewrite for a packet (nil = none); false = skip it
+	finalize bool                                       // repair lengths/checksums before queueing
 }
 
 // counters returns the caller-supplied Progress (reset) or a fresh Counters.
@@ -168,6 +207,14 @@ func feed(ctx context.Context, cfg *Config, o feedOpts, cnt *Counters, out chan<
 			if !cfg.Filter.MatchAll() && !cfg.Filter.Match(p.Data, &in) {
 				continue
 			}
+			var rw *mutate.Rewrite
+			if o.pick != nil {
+				var ok bool
+				if rw, ok = o.pick(&in); !ok {
+					cnt.Skipped.Add(1) // conversation not selected for replay
+					continue
+				}
+			}
 			b := mutate.Get()
 			if err := b.Load(p.LinkType, p.Data); err != nil {
 				mutate.Put(b)
@@ -175,8 +222,8 @@ func feed(ctx context.Context, cfg *Config, o feedOpts, cnt *Counters, out chan<
 				continue
 			}
 			origPay := b.In.PayEnd - b.In.PayOff
-			if o.rewrite != nil && o.rewrite.Active() {
-				if err := o.rewrite.Apply(b); err != nil {
+			if rw != nil && rw.Active() {
+				if err := rw.Apply(b); err != nil {
 					mutate.Put(b)
 					return err
 				}
@@ -207,19 +254,20 @@ func feed(ctx context.Context, cfg *Config, o feedOpts, cnt *Counters, out chan<
 // RunUDP replays matching UDP datagrams statelessly.
 func RunUDP(ctx context.Context, cfg Config) (*Result, error) {
 	cfg.defaults()
+	if err := cfg.prepare(); err != nil {
+		return nil, err
+	}
 	pc, err := pace.New(cfg.Pace)
 	if err != nil {
 		return nil, err
 	}
 	if !cfg.Opts.Target.IsValid() {
-		cfg.Opts.Target = cfg.Rewrite.DstIP
-		if !cfg.Opts.Target.IsValid() {
-			k, err := ProbeUDP(&cfg)
-			if err != nil {
-				return nil, err
-			}
-			cfg.Opts.Target = k.Server
+		// The first packet that will actually be replayed decides the route.
+		k, err := ProbeUDP(&cfg)
+		if err != nil {
+			return nil, err
 		}
+		cfg.Opts.Target = k.Server
 	}
 	if err := cfg.Backend.Open(cfg.Opts); err != nil {
 		return nil, err
@@ -232,7 +280,7 @@ func RunUDP(ctx context.Context, cfg Config) (*Result, error) {
 	q := make(chan item, cfg.QueueSize)
 	prodErr := make(chan error, 1)
 	go func() {
-		err := feed(ctx, &cfg, feedOpts{proto: decode.ProtoUDP, rewrite: &cfg.Rewrite, finalize: true}, cnt, q)
+		err := feed(ctx, &cfg, feedOpts{proto: decode.ProtoUDP, pick: cfg.pick, finalize: true}, cnt, q)
 		close(q)
 		prodErr <- err
 	}()

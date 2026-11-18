@@ -11,6 +11,7 @@ import (
 	"time"
 
 	"github.com/sasha/pktreplay/internal/backend"
+	"github.com/sasha/pktreplay/internal/conv"
 	"github.com/sasha/pktreplay/internal/craft"
 	"github.com/sasha/pktreplay/internal/decode"
 	"github.com/sasha/pktreplay/internal/mutate"
@@ -85,6 +86,11 @@ func ProbeUDP(cfg *Config) (FlowKey, error) { return probe(cfg, decode.ProtoUDP)
 
 func probe(cfg *Config, proto uint8) (FlowKey, error) {
 	cfg.defaults()
+	if cfg.convSet == nil {
+		if err := cfg.prepare(); err != nil {
+			return FlowKey{}, err
+		}
+	}
 	rd, err := pcapio.Open(cfg.Capture)
 	if err != nil {
 		return FlowKey{}, err
@@ -104,7 +110,23 @@ func probe(cfg *Config, proto uint8) (FlowKey, error) {
 		}
 		if decode.Decode(p.LinkType, p.Data, &in) && in.HasIP && in.Proto == proto && in.HasPorts &&
 			cfg.Filter.Match(p.Data, &in) {
-			return FlowKey{in.Src, in.Dst, in.SrcPort, in.DstPort}, nil
+			rw, ok := cfg.pick(&in)
+			if !ok {
+				continue // conversation not selected
+			}
+			k := FlowKey{in.Src, in.Dst, in.SrcPort, in.DstPort}
+			if rule, _ := cfg.convSet.Lookup(&in); rule != nil {
+				// A rule names the client explicitly; that, not the direction of the
+				// first packet seen, defines which side is replayed.
+				c, s := rule.Client, rule.Server()
+				k = FlowKey{c.Addr(), s.Addr(), c.Port(), s.Port()}
+			}
+			if proto == decode.ProtoUDP && rw != nil && rw.DstIP.IsValid() {
+				k.Server = rw.DstIP // where this packet will really go: decides the route
+			} else if proto == decode.ProtoUDP {
+				k.Server = in.Dst
+			}
+			return k, nil
 		}
 	}
 }
@@ -133,9 +155,18 @@ func RunTCP(ctx context.Context, cfg Config) (*Result, error) {
 	if err != nil {
 		return nil, err
 	}
+	if err := cfg.prepare(); err != nil {
+		return nil, err
+	}
 	key, err := ProbeFlow(&cfg)
 	if err != nil {
 		return nil, err
+	}
+	// A conversation rule defines the live endpoints and payload substitutions
+	// of the replayed conversation (and supersedes the global rewrite for it).
+	if rule := cfg.convSet.ForKey(conv.MakeKey(decode.ProtoTCP,
+		netip.AddrPortFrom(key.Client, key.ClientPort), netip.AddrPortFrom(key.Server, key.ServerPort))); rule != nil {
+		cfg.Rewrite, _ = rule.Rewrites()
 	}
 
 	// Resolve the live endpoints: rewritten values win over captured ones.
