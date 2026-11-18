@@ -14,6 +14,11 @@ dependencies, one codebase for Windows and Linux. Design and measurements: [docs
   always run before payload terms.
 * **Replay** in an explicit `-mode udp` (stateless) or `-mode tcp` (real handshake, mid-stream sequence
   rebasing, optional offsets, retransmission, FIN/ACK close).
+* **Conversation analysis and per-conversation rewrites**: `pktreplay conversations` (and the GUI table) lists
+  bidirectional flows with client/server roles, packet/byte counts and TCP state. A `-conv` rule changes the
+  addresses, ports or payload of *one* conversation, applied consistently to both directions (replies come from
+  the new server address); other conversations are untouched. The global `-src-ip/-dst-ip/...` flags remain for
+  the explicit "rewrite every packet" case.
 * In-place rewrites (IP, port, payload text/hex/substitution) with automatic length and checksum repair; pooled buffers.
 * Pacing: original timing (+speed), fixed delay, packets/s, Mbit/s, line rate.
 * **Recording** (-record file.pcap|.pcapng): saves the traffic actually transmitted, plus replies received in TCP mode\n  (-record-rx=false to omit them); raw-IP records with nanosecond timestamps, readable by tshark/Wireshark and by this tool.\n  Also available in the GUI and with the dry-run backend.\n* Backends: Linux `AF_PACKET` + `sendmmsg`, Windows WinDivert, and a `null` dry-run backend.
@@ -118,6 +123,12 @@ sudo pktreplay replay -mode tcp -dst-ip 10.20.0.5 -tcp-seq-offset -64 midstream.
 
 # 8. Windows (elevated PowerShell)
 .\pktreplay.exe replay -mode tcp -dst-ip 10.20.0.5 -dst-port 8080 capture.pcap
+
+# 8b. Analyze conversations, then change ONE of them (both directions stay consistent)
+pktreplay conversations capture.pcap
+sudo pktreplay replay -mode udp \
+     -conv "udp/192.168.1.50:40000/192.168.1.1:53,server-ip=10.50.0.9,server-port=5353" capture.pcap
+# add -only-conv to replay just the listed conversation(s); -conv is repeatable
 
 # 9. Record exactly what is transmitted (and the target's replies in TCP mode); .pcapng keeps direction
 sudo pktreplay replay -mode tcp -dst-ip 10.20.0.5 -record sent.pcapng capture.pcap

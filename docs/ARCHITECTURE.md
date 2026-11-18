@@ -125,6 +125,28 @@ type Backend interface {
 
 A `null` backend discards packets, for benchmarking the pipeline without privileges.
 
+## Conversations (`internal/conv`)
+A conversation is `(protocol, {endpoint A, endpoint B})` with the two endpoints in canonical order, so both
+directions share one key (ICMP uses port 0). `conv.Table` tracks them in a map bounded at 100 000 entries
+(~30 MB); packets of conversations beyond the cap are counted as "untracked" rather than growing memory.
+It is opt-in for analysis (one map lookup per IP packet).
+
+*Roles.* The client is the SYN sender; a SYN-ACK identifies the server; for mid-stream captures a well-known
+(<1024) port against an ephemeral one marks the server. A SYN that arrives later corrects a wrong guess and the
+direction counters are swapped.
+
+*Rewrites.* The global rewrite is packet-level: `-dst-ip X` rewrites the destination of **every** packet, so
+server replies are sent *to* X too. A `conv.Rule` is endpoint-level: "the server is now X" becomes
+`dst=X` for client->server packets and `src=X` for server->client packets, and only for packets whose
+canonical key matches. Resolution per packet: rule for its conversation (replaces the global IP/port rewrite for
+it) > global rewrite (explicit "all conversations") > untouched; with `OnlyConversations` packets of unruled
+conversations are dropped. In TCP mode a rule also *selects* which conversation is replayed and supplies the live
+client/server endpoints. Rules are validated up front: duplicates, IP-family mismatches and port changes on
+ICMP are rejected. Selector syntax `proto/client/server` (`[v6]:port` for IPv6) is shared by the CLI and GUI.
+
+Limitation: with a single Linux next-hop MAC all replayed packets leave via the route to the first replayed
+packet's (rewritten) destination; use `-dst-mac` when conversations are rewritten to different subnets.
+
 ## Recording (`internal/record`)
 `record.Recorder` wraps any `Backend`: `SendBatch` records the datagrams the backend accepted (a partially failed batch records only what was sent) and `Recv` records replies. Records are raw IP (LINKTYPE_RAW) with nanosecond timestamps taken when the packet crosses the backend; PCAPNG output adds an `epb_flags` direction option. The file is flushed when the backend closes, and the CLI/GUI close the writer again on every exit path (idempotent). Because it is a wrapper it adds no cost when unused and works unchanged with the Linux, Windows and null backends.
 
