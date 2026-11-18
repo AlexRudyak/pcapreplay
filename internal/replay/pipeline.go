@@ -69,6 +69,7 @@ type Counters struct {
 type Result struct {
 	Counters *Counters
 	Elapsed  time.Duration
+	TCP      *TCPStats // set in TCP mode
 }
 
 func (r *Result) String() string {
@@ -84,8 +85,17 @@ func (r *Result) String() string {
 }
 
 type item struct {
-	buf *mutate.Buf
-	ts  int64
+	buf     *mutate.Buf
+	ts      int64
+	origPay int // transport payload length before any rewrite
+}
+
+// feedOpts specialises the producer for a transport.
+type feedOpts struct {
+	proto    uint8
+	accept   func(*decode.Info) bool // extra per-packet test (e.g. flow tuple); may be nil
+	rewrite  *mutate.Rewrite         // applied by the producer; nil = none
+	finalize bool                    // repair lengths/checksums before queueing
 }
 
 func (c *Config) defaults() {
@@ -105,7 +115,7 @@ func (c *Config) defaults() {
 
 // feed is the producer: it streams the capture, keeps packets of the wanted
 // protocol that pass the filter, applies rewrites and hands them to out.
-func feed(ctx context.Context, cfg *Config, proto uint8, cnt *Counters, out chan<- item) error {
+func feed(ctx context.Context, cfg *Config, o feedOpts, cnt *Counters, out chan<- item) error {
 	rd, err := pcapio.Open(cfg.Capture)
 	if err != nil {
 		return err
@@ -137,7 +147,8 @@ func feed(ctx context.Context, cfg *Config, proto uint8, cnt *Counters, out chan
 				return fmt.Errorf("packet %d: %w", rd.Count(), err)
 			}
 			cnt.Read.Add(1)
-			if !decode.Decode(p.LinkType, p.Data, &in) || !in.HasIP || in.Proto != proto || !in.HasPorts {
+			if !decode.Decode(p.LinkType, p.Data, &in) || !in.HasIP || in.Proto != o.proto || !in.HasPorts ||
+				(o.accept != nil && !o.accept(&in)) {
 				cnt.Skipped.Add(1)
 				continue
 			}
@@ -150,20 +161,23 @@ func feed(ctx context.Context, cfg *Config, proto uint8, cnt *Counters, out chan
 				cnt.Skipped.Add(1)
 				continue
 			}
-			if cfg.Rewrite.Active() {
-				if err := cfg.Rewrite.Apply(b); err != nil {
+			origPay := b.In.PayEnd - b.In.PayOff
+			if o.rewrite != nil && o.rewrite.Active() {
+				if err := o.rewrite.Apply(b); err != nil {
 					mutate.Put(b)
 					return err
 				}
 			}
-			b.Finalize()
+			if o.finalize {
+				b.Finalize()
+			}
 			if firstTs == 0 {
 				firstTs = p.TsNanos
 			}
 			lastTs = p.TsNanos
 			cnt.Matched.Add(1)
 			select {
-			case out <- item{b, p.TsNanos + loopShift}:
+			case out <- item{b, p.TsNanos + loopShift, origPay}:
 			case <-ctx.Done():
 				mutate.Put(b)
 				return ctx.Err()
@@ -195,7 +209,7 @@ func RunUDP(ctx context.Context, cfg Config) (*Result, error) {
 	q := make(chan item, cfg.QueueSize)
 	prodErr := make(chan error, 1)
 	go func() {
-		err := feed(ctx, &cfg, decode.ProtoUDP, cnt, q)
+		err := feed(ctx, &cfg, feedOpts{proto: decode.ProtoUDP, rewrite: &cfg.Rewrite, finalize: true}, cnt, q)
 		close(q)
 		prodErr <- err
 	}()
