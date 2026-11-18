@@ -1,4 +1,4 @@
-# Architecture
+﻿# Architecture
 
 ## Language and library choice: Go, standard library only
 
@@ -20,11 +20,11 @@ dependencies** (`go.mod` has none), which also removes supply-chain surface.
  capture file
      |  1 MiB read-ahead (bufio), one reused []byte per record
      v
- pcapio.Reader ──> decode.Decode ──> filter.Match ──> mutate.Buf (pooled) ──┐
-   (pcap/pcapng)     (offsets only,     (headers first,   Load/Rewrite/        │ bounded
-                      0 allocs)          payload last)    Finalize             │ channel
+ pcapio.Reader â”€â”€> decode.Decode â”€â”€> filter.Match â”€â”€> mutate.Buf (pooled) â”€â”€â”
+   (pcap/pcapng)     (offsets only,     (headers first,   Load/Rewrite/        â”‚ bounded
+                      0 allocs)          payload last)    Finalize             â”‚ channel
                                                                                v (4096 items)
-              backend.SendBatch  <──  pace.Wait  <──  consumer goroutine ──────┘
+              backend.SendBatch  <â”€â”€  pace.Wait  <â”€â”€  consumer goroutine â”€â”€â”€â”€â”€â”€â”˜
               (sendmmsg / WinDivertSendEx)
 ```
 
@@ -124,6 +124,9 @@ type Backend interface {
 | Privileges | root, or `CAP_NET_RAW` (+ `CAP_NET_ADMIN` for the firewall rule) | Administrator; `WinDivert.dll` + `WinDivert64.sys` next to the exe |
 
 A `null` backend discards packets, for benchmarking the pipeline without privileges.
+
+## Recording (`internal/record`)
+`record.Recorder` wraps any `Backend`: `SendBatch` records the datagrams the backend accepted (a partially failed batch records only what was sent) and `Recv` records replies. Records are raw IP (LINKTYPE_RAW) with nanosecond timestamps taken when the packet crosses the backend; PCAPNG output adds an `epb_flags` direction option. The file is flushed when the backend closes, and the CLI/GUI close the writer again on every exit path (idempotent). Because it is a wrapper it adds no cost when unused and works unchanged with the Linux, Windows and null backends.
 
 ## Pacing (`internal/pace`)
 Absolute schedule (`start + due`), so a late packet never delays later ones; a stall longer than 250 ms re-bases

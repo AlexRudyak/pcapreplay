@@ -5,6 +5,7 @@ import (
 	"context"
 	"errors"
 	"net/netip"
+	"path/filepath"
 	"sync"
 	"testing"
 	"time"
@@ -15,6 +16,7 @@ import (
 	"github.com/sasha/pktreplay/internal/mutate"
 	"github.com/sasha/pktreplay/internal/pace"
 	"github.com/sasha/pktreplay/internal/pcapio"
+	"github.com/sasha/pktreplay/internal/record"
 )
 
 // fakeServer is an in-process TCP peer implementing backend.Backend: packets
@@ -308,6 +310,62 @@ func TestServerDataIsAcknowledged(t *testing.T) {
 	// The last data packet must acknowledge the server's 100 bytes.
 	if fs.lastDataAck != fs.srvISN+1+100 {
 		t.Fatalf("last data ack %d, want %d", fs.lastDataAck, fs.srvISN+101)
+	}
+}
+
+func TestRecordingCapturesWholeConversation(t *testing.T) {
+	fs := newFake()
+	fs.replyBytes = 50
+	cfg := baseCfg(t, withHandshake(), fs)
+	out := filepath.Join(t.TempDir(), "conv.pcap")
+	w, err := record.Create(out)
+	if err != nil {
+		t.Fatal(err)
+	}
+	cfg.Backend = record.Wrap(fs, w, true)
+	if _, err := RunTCP(context.Background(), cfg); err != nil {
+		t.Fatal(err)
+	}
+	// the backend closed the recorder: file must be complete already
+	rd, err := pcapio.Open(out)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer rd.Close()
+	var in decode.Info
+	var syn, synack, data, fin, fromServer, toServer int
+	var payload []byte
+	for {
+		p, err := rd.Next()
+		if err != nil {
+			break
+		}
+		if !decode.Decode(p.LinkType, p.Data, &in) {
+			t.Fatal("recorded packet does not decode")
+		}
+		if in.DstPort == 80 {
+			toServer++
+		} else {
+			fromServer++
+		}
+		switch {
+		case in.Flags&decode.SYN != 0 && in.Flags&decode.ACK == 0:
+			syn++
+		case in.Flags&decode.SYN != 0:
+			synack++
+		case in.Flags&decode.FIN != 0 && in.DstPort == 80:
+			fin++
+		}
+		if in.DstPort == 80 && in.PayEnd > in.PayOff {
+			data++
+			payload = append(payload, in.Payload(p.Data)...)
+		}
+	}
+	if syn != 1 || synack != 1 || fin != 1 || data != 3 || string(payload) != full {
+		t.Fatalf("syn=%d synack=%d data=%d fin=%d payload=%q", syn, synack, data, fin, payload)
+	}
+	if toServer == 0 || fromServer < 3 {
+		t.Fatalf("direction split wrong: to=%d from=%d", toServer, fromServer)
 	}
 }
 

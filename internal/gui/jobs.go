@@ -8,6 +8,7 @@ import (
 	"time"
 
 	"github.com/sasha/pktreplay/internal/filter"
+	"github.com/sasha/pktreplay/internal/record"
 	"github.com/sasha/pktreplay/internal/replay"
 	"github.com/sasha/pktreplay/internal/stats"
 )
@@ -41,6 +42,7 @@ type manager struct {
 	counters *replay.Counters
 	result   string
 	tcp      *tcpView
+	rec      *record.Writer
 }
 
 func newManager() *manager { return &manager{state: stateIdle} }
@@ -68,6 +70,13 @@ type StatusView struct {
 	Summary    *stats.Summary `json:"summary,omitempty"`
 	Replay     *replayView    `json:"replay,omitempty"`
 	TCP        *tcpView       `json:"tcp,omitempty"`
+	Recording  *recView       `json:"recording,omitempty"`
+}
+
+type recView struct {
+	Path    string `json:"path"`
+	Packets uint64 `json:"packets"`
+	Bytes   uint64 `json:"bytes"`
 }
 
 type scanView struct {
@@ -112,7 +121,7 @@ func (m *manager) begin(kind string) (context.Context, error) {
 	// Reset field by field: overwriting the struct would clobber the held mutex.
 	m.kind, m.state, m.cancel, m.started, m.finished = kind, stateRunning, cancel, time.Now(), time.Time{}
 	m.errMsg, m.log = "", nil
-	m.scan, m.summary, m.counters, m.result, m.tcp = nil, nil, nil, "", nil
+	m.scan, m.summary, m.counters, m.result, m.tcp, m.rec = nil, nil, nil, "", nil, nil
 	return ctx, nil
 }
 
@@ -201,8 +210,12 @@ func (m *manager) StartReplay(req *ReplayRequest) error {
 	cnt := &replay.Counters{}
 	cfg.Progress = cnt
 	cfg.TCP.Trace = func(f string, a ...any) { m.logf("[tcp] "+f, a...) }
+	rec, _ := cfg.Backend.(*record.Recorder)
 	m.mu.Lock()
 	m.counters = cnt
+	if rec != nil {
+		m.rec = rec.Writer()
+	}
 	m.mu.Unlock()
 	m.logf("starting %s replay of %s via %s backend", tr, req.Path, cfg.Backend.Name())
 	go func() {
@@ -212,6 +225,11 @@ func (m *manager) StartReplay(req *ReplayRequest) error {
 			res, err = replay.RunTCP(ctx, cfg)
 		} else {
 			res, err = replay.RunUDP(ctx, cfg)
+		}
+		if rec != nil {
+			rec.Writer().Close() // idempotent: flushed even if the backend never opened
+			n, b := rec.Writer().Stats()
+			m.logf("recorded %d packets (%d bytes) to %s", n, b, rec.Writer().Path())
 		}
 		m.mu.Lock()
 		if res != nil {
@@ -259,6 +277,10 @@ func (m *manager) Status() StatusView {
 			sv.Percent = 100
 		}
 		v.Scan = sv
+	}
+	if m.rec != nil {
+		p, b := m.rec.Stats()
+		v.Recording = &recView{Path: m.rec.Path(), Packets: p, Bytes: b}
 	}
 	if c := m.counters; c != nil {
 		rv := &replayView{Read: c.Read.Load(), Matched: c.Matched.Load(), Sent: c.Sent.Load(), Bytes: c.Bytes.Load(),

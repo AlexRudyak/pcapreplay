@@ -17,6 +17,7 @@ import (
 	"github.com/sasha/pktreplay/internal/mutate"
 	"github.com/sasha/pktreplay/internal/pace"
 	"github.com/sasha/pktreplay/internal/pcapio"
+	"github.com/sasha/pktreplay/internal/record"
 	"github.com/sasha/pktreplay/internal/replay"
 )
 
@@ -79,6 +80,9 @@ Backend:
   -backend auto|null   null = dry run without privileges (benchmark the pipeline)
   -iface NAME  -src-mac  -dst-mac  (Linux)   -ifindex N (Windows)   -no-firewall (Linux)
 
+Recording:
+  -record FILE         save everything transmitted (and replies, see -record-rx) as pcap/pcapng
+
 Other:
   -queue N  -batch N  -v
 
@@ -114,6 +118,8 @@ Flags:
 	skipBytes := fs.Int64("tcp-skip-bytes", 0, "TCP: skip the first N bytes of the captured client stream")
 	ackMode := fs.String("tcp-ack-mode", replay.AckLive, "TCP: live or capture")
 	hsTimeout := fs.Duration("handshake-timeout", 5*time.Second, "TCP: handshake timeout")
+	recordPath := fs.String("record", "", "record transmitted traffic to this file (.pcapng = PCAPNG with direction, else PCAP)")
+	recordRx := fs.Bool("record-rx", true, "with -record, also record replies received from the target (TCP mode)")
 	queue := fs.Int("queue", 4096, "producer/consumer queue depth")
 	batch := fs.Int("batch", 64, "max packets per send batch in burst mode")
 	verbose := fs.Bool("v", false, "verbose protocol trace")
@@ -204,6 +210,16 @@ Flags:
 	if err != nil {
 		return err
 	}
+	var rec *record.Recorder
+	if *recordPath != "" {
+		w, err := record.Create(*recordPath)
+		if err != nil {
+			return fmt.Errorf("-record: %w", err)
+		}
+		rec = record.Wrap(cfg.Backend, w, *recordRx)
+		cfg.Backend = rec
+		defer w.Close() // idempotent; guarantees a flushed file on every exit path
+	}
 	cfg.Opts.Iface, cfg.Opts.IfIndex, cfg.Opts.NoFirewall = *iface, uint32(*ifIndex), *noFW
 	cfg.TCP = replay.TCPConfig{SeqOffset: *seqOff, SkipBytes: *skipBytes, AckMode: *ackMode,
 		HandshakeTimeout: *hsTimeout}
@@ -231,6 +247,11 @@ Flags:
 				t.Flow, t.Live.LocalIP, t.HandshakeRTT.Round(time.Microsecond), t.Retransmits, t.RxBytes,
 				t.RxSegments, t.FinalState)
 		}
+	}
+	if rec != nil {
+		rec.Writer().Close()
+		n, b := rec.Writer().Stats()
+		fmt.Printf("recorded %d packets (%d bytes) to %s\n", n, b, rec.Writer().Path())
 	}
 	return err
 }

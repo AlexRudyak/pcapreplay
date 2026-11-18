@@ -13,6 +13,7 @@ import (
 	"github.com/sasha/pktreplay/internal/mutate"
 	"github.com/sasha/pktreplay/internal/pace"
 	"github.com/sasha/pktreplay/internal/pcapio"
+	"github.com/sasha/pktreplay/internal/record"
 	"github.com/sasha/pktreplay/internal/replay"
 )
 
@@ -55,6 +56,9 @@ type ReplayRequest struct {
 	SkipBytes        int64  `json:"skipBytes"`
 	AckMode          string `json:"ackMode"`
 	HandshakeTimeout string `json:"handshakeTimeout"`
+
+	Record   string `json:"record"`   // output file; empty = do not record
+	RecordRx bool   `json:"recordRx"` // also record replies received from the target
 }
 
 func positionFn(start uint64) func(*pcapio.Reader) error {
@@ -202,5 +206,14 @@ func (r *ReplayRequest) buildConfig() (replay.Config, replay.Transport, error) {
 		return zero, 0, errors.New("skip bytes cannot be negative")
 	}
 	cfg.TCP = replay.TCPConfig{SeqOffset: r.SeqOffset, SkipBytes: r.SkipBytes, AckMode: r.AckMode, HandshakeTimeout: hs}
+
+	// Created last so a validation failure never leaves an empty file behind.
+	if p := strings.TrimSpace(r.Record); p != "" {
+		w, err := record.Create(p)
+		if err != nil {
+			return zero, 0, fmt.Errorf("recording: %w", err)
+		}
+		cfg.Backend = record.Wrap(cfg.Backend, w, r.RecordRx)
+	}
 	return cfg, tr, nil
 }

@@ -237,6 +237,33 @@ func TestReplayValidationAndNullRun(t *testing.T) {
 	}
 }
 
+func TestReplayRecordsTraffic(t *testing.T) {
+	c := newTC(t)
+	p := makePCAP(t, 40)
+	out := filepath.Join(t.TempDir(), "sent.pcapng")
+	// a bad record path is rejected before anything starts
+	if r, b := c.do("POST", "/api/replay", map[string]any{"path": p, "mode": "udp", "backend": "null",
+		"record": filepath.Join(t.TempDir(), "no", "dir", "x.pcap")}, nil); r.StatusCode != 400 {
+		t.Fatalf("bad record path: %d %s", r.StatusCode, b)
+	}
+	if r, b := c.do("POST", "/api/replay", map[string]any{"path": p, "mode": "udp", "backend": "null", "paceMode": "burst",
+		"filter": "proto == udp", "dstIp": "10.9.9.9", "record": out}, nil); r.StatusCode != 202 {
+		t.Fatalf("start: %d %s", r.StatusCode, b)
+	}
+	st := c.waitDone()
+	if st.State != stateDone || st.Recording == nil || st.Recording.Packets != 40 || st.Recording.Path != out {
+		t.Fatalf("status: %+v rec=%+v", st, st.Recording)
+	}
+	// the file is complete, readable, and contains the *rewritten* datagrams
+	cs := newTC(t)
+	cs.do("POST", "/api/stats", map[string]any{"path": out}, nil)
+	sum := cs.waitDone().Summary
+	if sum == nil || sum.Packets != 40 || sum.Format != "pcapng" || len(sum.Protocols) != 1 ||
+		sum.Protocols[0].Name != "UDP" || sum.Protocols[0].Packets != 40 {
+		t.Fatalf("recording summary: %+v", sum)
+	}
+}
+
 func TestCancelAndBusy(t *testing.T) {
 	c := newTC(t)
 	p := makePCAP(t, 400)

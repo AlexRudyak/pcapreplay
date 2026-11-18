@@ -115,6 +115,14 @@
         </div>
 
         <div class="card">
+          <h3>Record transmitted traffic <small class="muted">(optional)</small></h3>
+          <label>Save to file
+            <input id="record" type="text" placeholder="e.g. D:\captures\sent.pcapng (leave empty to not record)" spellcheck="false" autocomplete="off">
+            <small class="hint">.pcapng keeps packet direction; any other extension writes classic pcap. Raw-IP records, nanosecond timestamps, readable by tshark/Wireshark and by this tool.</small></label>
+          <label class="check"><input id="recordRx" type="checkbox" checked> Also record replies from the target (TCP mode)</label>
+        </div>
+
+        <div class="card">
           <h3>Backend</h3>
           <div class="grid4">
             <label>Backend
@@ -143,6 +151,7 @@
           </div>
           <small class="hint" id="startHint">Choose a capture and a transmission mode to enable replay.</small>
           <div id="tcpInfo" class="tcpinfo" hidden></div>
+          <div id="recInfo" class="tcpinfo" hidden></div>
           <pre id="log" class="log" aria-live="polite"></pre>
         </div>
       </aside>

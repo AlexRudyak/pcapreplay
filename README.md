@@ -16,7 +16,7 @@ dependencies, one codebase for Windows and Linux. Design and measurements: [docs
   rebasing, optional offsets, retransmission, FIN/ACK close).
 * In-place rewrites (IP, port, payload text/hex/substitution) with automatic length and checksum repair; pooled buffers.
 * Pacing: original timing (+speed), fixed delay, packets/s, Mbit/s, line rate.
-* Backends: Linux `AF_PACKET` + `sendmmsg`, Windows WinDivert, and a `null` dry-run backend.
+* **Recording** (-record file.pcap|.pcapng): saves the traffic actually transmitted, plus replies received in TCP mode\n  (-record-rx=false to omit them); raw-IP records with nanosecond timestamps, readable by tshark/Wireshark and by this tool.\n  Also available in the GUI and with the dry-run backend.\n* Backends: Linux `AF_PACKET` + `sendmmsg`, Windows WinDivert, and a `null` dry-run backend.
 
 ## GUI
 ```bash
@@ -119,7 +119,10 @@ sudo pktreplay replay -mode tcp -dst-ip 10.20.0.5 -tcp-seq-offset -64 midstream.
 # 8. Windows (elevated PowerShell)
 .\pktreplay.exe replay -mode tcp -dst-ip 10.20.0.5 -dst-port 8080 capture.pcap
 
-# 9. Dry run: benchmark read + filter + rewrite without privileges or a network
+# 9. Record exactly what is transmitted (and the target's replies in TCP mode); .pcapng keeps direction
+sudo pktreplay replay -mode tcp -dst-ip 10.20.0.5 -record sent.pcapng capture.pcap
+
+# 10. Dry run: benchmark read + filter + rewrite without privileges or a network
 pktreplay replay -mode udp -backend null -burst -dst-ip 10.9.9.9 huge.pcap
 ```
 `-mode` is mandatory: replay never guesses between TCP and UDP. Run `pktreplay replay -h` for every flag.

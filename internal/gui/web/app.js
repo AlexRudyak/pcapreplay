@@ -158,6 +158,7 @@ function replayBody() {
     backend: $("#backend").value, iface: $("#iface").value, srcMac: $("#srcMac").value, dstMac: $("#dstMac").value,
     ifIndex: num("#ifIndex"), noFirewall: $("#noFirewall").checked,
     seqOffset: num("#seqOffset"), skipBytes: num("#skipBytes"), ackMode: $("#ackMode").value, handshakeTimeout: $("#handshakeTimeout").value,
+    record: $("#record").value.trim(), recordRx: $("#recordRx").checked,
   };
 }
 
@@ -224,6 +225,11 @@ async function poll() {
       ["Handshake", s.tcp.handshakeUs ? s.tcp.handshakeUs.toFixed(0) + " µs" : "–"], ["Retransmits", String(s.tcp.retransmits)],
       ["Server sent", fmtBytes(s.tcp.rxBytes) + " / " + s.tcp.rxSegments + " segs"], ["Ended", s.tcp.finalState || "–"]]) {
       const d = el("div"); d.append(el("span", "", k), el("span", "mono", v)); ti.append(d);
+    }
+    const ri = $("#recInfo");
+    ri.hidden = !s.recording; ri.replaceChildren();
+    if (s.recording) for (const [k, v] of [["Recording", s.recording.path], ["Packets", fmtInt(s.recording.packets)], ["Bytes", fmtBytes(s.recording.bytes)]]) {
+      const d = el("div"); d.append(el("span", "", k), el("span", "mono", v)); ri.append(d);
     }
     const log = $("#log"), atEnd = log.scrollTop + log.clientHeight >= log.scrollHeight - 8;
     log.textContent = s.log.join("\n");
