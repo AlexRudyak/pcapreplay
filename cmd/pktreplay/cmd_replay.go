@@ -13,6 +13,7 @@ import (
 	"time"
 
 	"github.com/sasha/pktreplay/internal/backend"
+	"github.com/sasha/pktreplay/internal/conv"
 	"github.com/sasha/pktreplay/internal/filter"
 	"github.com/sasha/pktreplay/internal/mutate"
 	"github.com/sasha/pktreplay/internal/pace"
@@ -62,7 +63,12 @@ Selection:
   -filter EXPR         e.g. 'src_ip == 192.168.1.10 AND dst_port == 8080'
   -start N -count N    packet range (with -index for O(1) seeking); -loop N passes
 
-Rewrites:
+Per-conversation rewrites (list conversations with 'pktreplay conversations'):
+  -conv RULE           change ONE conversation, consistently in both directions; repeatable
+                       RULE = proto/client/server[,client-ip=IP][,client-port=N][,server-ip=IP][,server-port=N][,replace=a=>b]
+  -only-conv           replay only the conversations that have a -conv rule (implied in TCP mode)
+
+Rewrites applied to EVERY packet of every conversation without a -conv rule:
   -src-ip -dst-ip -src-port -dst-port
   -payload TEXT|hex:..|0x..     replace whole payload
   -replace 'old=>new'           in-payload substitution (repeatable)
@@ -102,6 +108,9 @@ Flags:
 	payload := fs.String("payload", "", "replace the transport payload (text, hex:de ad.., or 0xdead..)")
 	var repl listFlag
 	fs.Var(&repl, "replace", "payload substitution 'old=>new' (repeatable; text or hex)")
+	var convRules listFlag
+	fs.Var(&convRules, "conv", "per-conversation rewrite 'proto/client/server[,client-ip=..][,client-port=..][,server-ip=..][,server-port=..][,replace=a=>b]' (repeatable; see 'conversations')")
+	onlyConv := fs.Bool("only-conv", false, "replay only the conversations given with -conv (implied in TCP mode)")
 	speed := fs.Float64("speed", 0, "original-timing speed factor (default 1)")
 	delay := fs.Duration("delay", 0, "fixed inter-packet delay")
 	pps := fs.Float64("pps", 0, "packets-per-second cap")
@@ -176,8 +185,17 @@ Flags:
 		collect(e)
 		cfg.Rewrite.Replace = append(cfg.Rewrite.Replace, s)
 	}
+	for _, c := range convRules {
+		r, e := conv.ParseRule(c)
+		collect(e)
+		cfg.Conversations = append(cfg.Conversations, r)
+	}
+	cfg.OnlyConversations = *onlyConv
 	if err := errors.Join(errs...); err != nil {
 		return err
+	}
+	if *onlyConv && len(convRules) == 0 {
+		return errors.New("-only-conv needs at least one -conv rule")
 	}
 	if *srcPort > 65535 || *dstPort > 65535 {
 		return errors.New("ports must be in 0-65535")
