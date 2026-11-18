@@ -131,6 +131,143 @@ function renderSummary(s) {
   bars($("#talkers"), s.talkers, (t) => t.addr, (t) => t.bytes, fmtBytes);
   bars($("#tcpPorts"), s.tcpPorts, (p) => String(p.port), (p) => p.packets, (n) => fmtInt(n) + " pkts");
   bars($("#udpPorts"), s.udpPorts, (p) => String(p.port), (p) => p.packets, (n) => fmtInt(n) + " pkts");
+  convData = s;
+  renderConversations();
+}
+
+// ---------- conversations (analysis) ----------
+let convData = null;
+const MAX_ROWS = 500;
+
+function renderConversations() {
+  const s = convData, tb = $("#convTable tbody");
+  tb.replaceChildren();
+  if (!s || !s.conversations) { $("#convCard").hidden = true; return; }
+  $("#convCard").hidden = false;
+  const q = $("#convSearch").value.trim().toLowerCase();
+  const rows = s.conversations.filter((c) => !q || (c.selector + " " + c.state).toLowerCase().includes(q));
+  $("#convCount").textContent = "(" + fmtInt(s.conversationsTotal) + " tracked" + (q ? ", " + fmtInt(rows.length) + " match" : "") + ")";
+  for (const c of rows.slice(0, MAX_ROWS)) {
+    const tr = el("tr");
+    const proto = el("td"); proto.append(el("span", "tag", c.proto));
+    const isPorts = c.proto === "tcp" || c.proto === "udp";
+    const ep = (ip, port) => isPorts ? (ip.includes(":") ? "[" + ip + "]:" + port : ip + ":" + port) : ip;
+    const btn = el("button", "small", ruleIndex(c.selector) >= 0 ? "Edit in Replay →" : "＋ Replay…");
+    btn.type = "button";
+    btn.onclick = () => { addRule(c.selector); selectTab("replay"); };
+    const act = el("td"); act.append(btn);
+    tr.append(proto, el("td", "mono", ep(c.clientIp, c.clientPort)), el("td", "mono", ep(c.serverIp, c.serverPort)),
+      el("td", "num", fmtInt(c.packets) + "  (" + fmtInt(c.c2sPackets) + " / " + fmtInt(c.s2cPackets) + ")"),
+      el("td", "num", fmtBytes(c.bytes)), el("td", "num", c.durationSec ? fmtDur(c.durationSec) : "–"), el("td", "", c.state), act);
+    tb.append(tr);
+  }
+  const notes = [];
+  if (rows.length > MAX_ROWS) notes.push("Showing the " + MAX_ROWS + " largest of " + fmtInt(rows.length) + " matches: refine the filter to see others.");
+  if (s.conversationsTotal > s.conversations.length) notes.push("The table lists the " + fmtInt(s.conversations.length) + " largest conversations by bytes (" + fmtInt(s.conversationsTotal) + " tracked).");
+  if (s.conversationsUntracked > 0) notes.push(fmtInt(s.conversationsUntracked) + " packets belong to further conversations beyond the tracking limit and are not listed.");
+  notes.push("Client = the side that opened the conversation (SYN sender; otherwise first packet, or the well-known port's peer). → / ← are client→server and server→client packets.");
+  $("#convNote").textContent = notes.join(" ");
+}
+$("#convSearch").addEventListener("input", renderConversations);
+
+// ---------- per-conversation rules (replay) ----------
+const rules = [];
+
+function splitEndpoint(proto, s) {
+  if (proto !== "tcp" && proto !== "udp") return { ip: s, port: 0 };
+  const m = s.match(/^\[(.+)\]:(\d+)$/) || s.match(/^([^:]+):(\d+)$/);
+  return m ? { ip: m[1], port: Number(m[2]) } : null;
+}
+function parseSelector(sel) {
+  const p = sel.trim().split("/");
+  if (p.length !== 3) return null;
+  const proto = p[0].toLowerCase(), c = splitEndpoint(proto, p[1]), s = splitEndpoint(proto, p[2]);
+  return c && s ? { selector: proto + "/" + p[1] + "/" + p[2], proto, client: c, server: s } : null;
+}
+const ruleIndex = (sel) => rules.findIndex((r) => r.selector === sel);
+
+function addRule(sel) {
+  const p = parseSelector(sel);
+  if (!p) return false;
+  if (ruleIndex(p.selector) < 0) rules.push({ ...p, clientIp: "", clientPort: "", serverIp: "", serverPort: "", replace: "" });
+  renderRules();
+  renderConversations();
+  return true;
+}
+
+function fmtEp(proto, ip, port) {
+  if (proto !== "tcp" && proto !== "udp") return ip;
+  return (ip.includes(":") ? "[" + ip + "]" : ip) + ":" + port;
+}
+
+function renderRules() {
+  const box = $("#ruleList");
+  box.replaceChildren();
+  rules.forEach((r, i) => {
+    const hasPorts = r.proto === "tcp" || r.proto === "udp";
+    const card = el("div", "rule");
+    const head = el("div", "rule-head");
+    head.append(el("span", "tag", r.proto), el("span", "sel", r.selector));
+    const rm = el("button", "small", "Remove"); rm.type = "button";
+    rm.onclick = () => { rules.splice(i, 1); renderRules(); renderConversations(); };
+    head.append(rm);
+    const grid = el("div", "grid4");
+    const preview = el("div", "preview");
+    const field = (label, key, placeholder, type) => {
+      const l = el("label", "", label); const inp = el("input"); inp.type = type; inp.value = r[key]; inp.placeholder = placeholder;
+      if (type === "number") { inp.min = "0"; inp.max = "65535"; } else inp.spellcheck = false;
+      inp.oninput = () => { r[key] = inp.value.trim(); updatePreview(); };
+      l.append(inp); return l;
+    };
+    grid.append(field("Client IP", "clientIp", r.client.ip, "text"));
+    if (hasPorts) grid.append(field("Client port", "clientPort", String(r.client.port), "number"));
+    grid.append(field("Server IP", "serverIp", r.server.ip, "text"));
+    if (hasPorts) grid.append(field("Server port", "serverPort", String(r.server.port), "number"));
+    const det = el("details"); det.append(el("summary", "", "Payload substitutions for this conversation"));
+    const ta = el("textarea"); ta.rows = 2; ta.spellcheck = false; ta.placeholder = "old=>new (one per line)"; ta.value = r.replace;
+    ta.oninput = () => { r.replace = ta.value; };
+    det.append(ta); if (r.replace) det.open = true;
+    function updatePreview() {
+      const cIp = r.clientIp || r.client.ip, sIp = r.serverIp || r.server.ip;
+      const cPort = r.clientPort || r.client.port, sPort = r.serverPort || r.server.port;
+      const changed = r.clientIp || r.clientPort || r.serverIp || r.serverPort;
+      preview.replaceChildren(document.createTextNode("replays as  "));
+      const b = el(changed ? "b" : "span", "", fmtEp(r.proto, cIp, cPort) + "  ⇄  " + fmtEp(r.proto, sIp, sPort));
+      preview.append(b, document.createTextNode(changed ? "   (server replies come FROM the new server address)" : "   (unchanged)"));
+    }
+    updatePreview();
+    card.append(head, grid, preview, det);
+    box.append(card);
+  });
+  $("#convEmpty").hidden = rules.length > 0;
+  const badge = $("#ruleBadge"); badge.hidden = rules.length === 0; badge.textContent = String(rules.length);
+  updateOnly();
+  refreshButtons();
+}
+
+$("#addSelector").onclick = () => {
+  const v = $("#selectorIn").value.trim();
+  if (!v) return;
+  if (addRule(v)) { $("#selectorIn").value = ""; $("#selectorErr").textContent = ""; }
+  else { $("#selectorErr").textContent = "Expected proto/client/server, e.g. tcp/192.168.1.50:51234/192.168.1.10:80 or icmp/10.0.0.1/10.0.0.2"; $("#selectorErr").style.color = "var(--err)"; }
+};
+$("#selectorIn").addEventListener("keydown", (e) => { if (e.key === "Enter") $("#addSelector").click(); });
+
+function updateOnly() {
+  const cb = $("#onlyListed"), tcp = mode === "tcp";
+  cb.disabled = tcp || rules.length === 0;
+  if (tcp) cb.checked = rules.length > 0;
+  $("#onlyListedText").textContent = tcp
+    ? "TCP mode replays a single conversation: the listed one (or the first matching conversation if none is listed)"
+    : "Replay only the listed conversations (skip all others)";
+}
+
+function ruleBody() {
+  return rules.map((r) => ({
+    selector: r.selector, clientIp: r.clientIp, serverIp: r.serverIp,
+    clientPort: Number(r.clientPort) || 0, serverPort: Number(r.serverPort) || 0,
+    replace: r.replace.split("\n").filter((l) => l.trim()),
+  }));
 }
 
 // ---------- replay form ----------
@@ -138,6 +275,7 @@ $$("#modeSeg button").forEach((b) => b.onclick = () => {
   mode = b.dataset.mode;
   $$("#modeSeg button").forEach((x) => x.setAttribute("aria-checked", String(x === b)));
   $("#tcpCard").hidden = mode !== "tcp";
+  updateOnly();
   refreshButtons();
 });
 function paceVisibility() {
@@ -159,6 +297,7 @@ function replayBody() {
     ifIndex: num("#ifIndex"), noFirewall: $("#noFirewall").checked,
     seqOffset: num("#seqOffset"), skipBytes: num("#skipBytes"), ackMode: $("#ackMode").value, handshakeTimeout: $("#handshakeTimeout").value,
     record: $("#record").value.trim(), recordRx: $("#recordRx").checked,
+    conversations: ruleBody(), onlyConversations: $("#onlyListed").checked && rules.length > 0,
   };
 }
 
@@ -171,12 +310,15 @@ $("#stopReplay").onclick = () => api("/api/cancel", {}).catch(() => {});
 
 function refreshButtons() {
   const running = lastState === "running";
-  const ready = !!$("#path").value.trim() && !!mode;
+  const tooMany = mode === "tcp" && rules.length > 1;
+  const ready = !!$("#path").value.trim() && !!mode && !tooMany;
   $("#runReplay").disabled = !ready || running;
   $("#runStats").disabled = !$("#path").value.trim() || running;
   const hint = $("#startHint");
   if (!$("#path").value.trim()) hint.textContent = "Choose a capture file first.";
   else if (!mode) hint.textContent = "Select TCP or UDP above: the transmission mode is never guessed.";
+  else if (tooMany) hint.textContent = "TCP mode replays a single conversation: remove all but one from the list.";
+  else if (mode === "tcp" && rules.length === 0) hint.textContent = "No conversation chosen: TCP will replay the first one that matches the filter. Add one from Analyze to pick.";
   else if (info.elevated === false && $("#backend").value !== "null") hint.textContent = "Raw injection needs elevated privileges; start pktreplay as Administrator/root, or use Dry run.";
   else hint.textContent = "Ready.";
 }

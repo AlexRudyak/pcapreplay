@@ -264,6 +264,71 @@ func TestReplayRecordsTraffic(t *testing.T) {
 	}
 }
 
+func TestAnalysisListsConversations(t *testing.T) {
+	c := newTC(t)
+	p := makePCAP(t, 30)
+	c.do("POST", "/api/stats", map[string]any{"path": p}, nil)
+	sum := c.waitDone().Summary
+	if sum == nil || sum.ConversationsTotal != 2 || len(sum.Conversations) != 2 {
+		t.Fatalf("conversations: %+v", sum)
+	}
+	sel := map[string]uint64{}
+	for _, cv := range sum.Conversations {
+		sel[cv.Selector] = cv.Packets
+	}
+	if sel["udp/10.0.0.1:1000/10.0.0.2:53"] != 30 || sel["tcp/10.0.0.1:2000/10.0.0.2:80"] != 30 {
+		t.Fatalf("selectors: %v", sel)
+	}
+}
+
+func TestReplayConversationRuleChangesOnlyThatConversation(t *testing.T) {
+	c := newTC(t)
+	p := makePCAP(t, 20) // 20 UDP/53 + 20 TCP/80 packets, one conversation each
+	out := filepath.Join(t.TempDir(), "sent.pcap")
+	r, b := c.do("POST", "/api/replay", map[string]any{"path": p, "mode": "udp", "backend": "null", "paceMode": "burst",
+		"record": out, "conversations": []map[string]any{{"selector": "udp/10.0.0.1:1000/10.0.0.2:53", "serverIp": "10.9.9.9"}}}, nil)
+	if r.StatusCode != 202 {
+		t.Fatalf("start: %d %s", r.StatusCode, b)
+	}
+	if st := c.waitDone(); st.State != stateDone {
+		t.Fatalf("state %s %s", st.State, st.Error)
+	}
+	// UDP mode replays UDP only; the rule moved that one conversation to 10.9.9.9
+	cs := newTC(t)
+	cs.do("POST", "/api/stats", map[string]any{"path": out}, nil)
+	sum := cs.waitDone().Summary
+	if sum == nil || len(sum.Conversations) != 1 || sum.Conversations[0].Selector != "udp/10.0.0.1:1000/10.9.9.9:53" ||
+		sum.Conversations[0].Packets != 20 {
+		t.Fatalf("recorded conversations: %+v", sum)
+	}
+}
+
+func TestConversationRequestValidation(t *testing.T) {
+	c := newTC(t)
+	p := makePCAP(t, 5)
+	base := func(extra map[string]any) map[string]any {
+		m := map[string]any{"path": p, "mode": "udp", "backend": "null"}
+		for k, v := range extra {
+			m[k] = v
+		}
+		return m
+	}
+	rule := func(sel string) map[string]any { return map[string]any{"selector": sel, "serverIp": "10.1.1.1"} }
+	for name, body := range map[string]map[string]any{
+		"bad selector":      base(map[string]any{"conversations": []any{rule("nonsense")}}),
+		"bad new IP":        base(map[string]any{"conversations": []any{map[string]any{"selector": "udp/10.0.0.1:1000/10.0.0.2:53", "serverIp": "x.y"}}}),
+		"family mismatch":   base(map[string]any{"conversations": []any{map[string]any{"selector": "udp/10.0.0.1:1000/10.0.0.2:53", "serverIp": "fd00::1"}}}),
+		"duplicate":         base(map[string]any{"conversations": []any{rule("udp/10.0.0.1:1000/10.0.0.2:53"), rule("udp/10.0.0.2:53/10.0.0.1:1000")}}),
+		"only without list": base(map[string]any{"onlyConversations": true}),
+		"tcp with two": base(map[string]any{"mode": "tcp", "conversations": []any{rule("tcp/10.0.0.1:2000/10.0.0.2:80"),
+			rule("tcp/10.0.0.1:2001/10.0.0.2:80")}}),
+	} {
+		if r, b := c.do("POST", "/api/replay", body, nil); r.StatusCode != 400 {
+			t.Errorf("%s accepted: %d %s", name, r.StatusCode, b)
+		}
+	}
+}
+
 func TestCancelAndBusy(t *testing.T) {
 	c := newTC(t)
 	p := makePCAP(t, 400)

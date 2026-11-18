@@ -34,7 +34,7 @@
 
   <nav class="tabs" role="tablist">
     <button role="tab" id="tab-analyze" aria-selected="true">Analyze</button>
-    <button role="tab" id="tab-replay" aria-selected="false">Replay</button>
+    <button role="tab" id="tab-replay" aria-selected="false">Replay <span class="count" id="ruleBadge" hidden></span></button>
   </nav>
 
   <!-- ANALYZE -->
@@ -54,6 +54,19 @@
         <div class="card"><h3>TCP destination ports</h3><div id="tcpPorts"></div></div>
         <div class="card"><h3>UDP destination ports</h3><div id="udpPorts"></div></div>
       </div>
+      <div class="card" id="convCard">
+        <div class="row">
+          <h3 class="grow">Conversations <small id="convCount" class="muted"></small></h3>
+          <input id="convSearch" type="search" placeholder="Filter: 10.0.0.2, tcp, :443, closed…" spellcheck="false">
+        </div>
+        <div class="tablewrap">
+          <table id="convTable">
+            <thead><tr><th>Proto</th><th>Client</th><th>Server</th><th class="num">Packets <small>(→ / ←)</small></th><th class="num">Bytes</th><th class="num">Duration</th><th>State</th><th></th></tr></thead>
+            <tbody></tbody>
+          </table>
+        </div>
+        <small id="convNote" class="hint"></small>
+      </div>
     </div>
   </section>
 
@@ -69,8 +82,23 @@
           </div>
         </div>
 
-        <div class="card">
-          <h3>Rewrite <small class="muted">(empty = keep captured value)</small></h3>
+        <div class="card" id="convRules">
+          <h3>Conversations to change <small class="muted">(optional)</small></h3>
+          <p class="hint" id="convEmpty">Nothing selected: every conversation in the filtered capture is replayed exactly as recorded.
+            Add conversations from the <b>Analyze</b> tab (or paste a selector below) to change their addresses, ports or payload. Only the conversations you list are modified.</p>
+          <div id="ruleList"></div>
+          <div class="row">
+            <input id="selectorIn" class="grow mono" type="text" placeholder="tcp/192.168.1.50:51234/192.168.1.10:80" spellcheck="false" autocomplete="off">
+            <button id="addSelector" type="button">Add by selector</button>
+          </div>
+          <small id="selectorErr" class="hint"></small>
+          <label class="check"><input id="onlyListed" type="checkbox"> <span id="onlyListedText">Replay only the listed conversations (skip all others)</span></label>
+        </div>
+
+        <details class="card" id="globalRewrite">
+          <summary><b>Rewrite ALL conversations</b> <span class="req">every packet</span></summary>
+          <p class="hint warnbox">Applies to <b>every packet</b> of every conversation that is not listed above, including the server's replies:
+            a destination IP set here is written into replies too. Prefer the per-conversation editor unless you really want one address for everything.</p>
           <div class="grid4">
             <label>Source IP<input id="srcIp" type="text" placeholder="captured" spellcheck="false"></label>
             <label>Source port<input id="srcPort" type="number" min="0" max="65535" placeholder="captured"></label>
@@ -80,7 +108,7 @@
           <label>Replace entire payload <input id="payload" type="text" placeholder='text, hex:de ad be ef, or 0xdeadbeef' spellcheck="false"></label>
           <label>Substitutions <small class="muted">one per line: <code>old=&gt;new</code></small>
             <textarea id="replace" rows="2" spellcheck="false" placeholder="tenant-a=>tenant-b"></textarea></label>
-        </div>
+        </details>
 
         <div class="card">
           <h3>Pacing</h3>

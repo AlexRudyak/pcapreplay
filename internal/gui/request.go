@@ -9,6 +9,7 @@ import (
 	"time"
 
 	"github.com/sasha/pktreplay/internal/backend"
+	"github.com/sasha/pktreplay/internal/conv"
 	"github.com/sasha/pktreplay/internal/filter"
 	"github.com/sasha/pktreplay/internal/mutate"
 	"github.com/sasha/pktreplay/internal/pace"
@@ -57,8 +58,52 @@ type ReplayRequest struct {
 	AckMode          string `json:"ackMode"`
 	HandshakeTimeout string `json:"handshakeTimeout"`
 
+	// Conversations are per-conversation rewrites (selected from the analysis).
+	Conversations     []ConvRuleRequest `json:"conversations"`
+	OnlyConversations bool              `json:"onlyConversations"`
+
 	Record   string `json:"record"`   // output file; empty = do not record
 	RecordRx bool   `json:"recordRx"` // also record replies received from the target
+}
+
+// ConvRuleRequest changes one conversation. Empty fields keep captured values.
+type ConvRuleRequest struct {
+	Selector   string   `json:"selector"` // proto/client/server
+	ClientIP   string   `json:"clientIp"`
+	ClientPort uint     `json:"clientPort"`
+	ServerIP   string   `json:"serverIp"`
+	ServerPort uint     `json:"serverPort"`
+	Replace    []string `json:"replace"`
+}
+
+func (c *ConvRuleRequest) rule() (conv.Rule, error) {
+	k, client, err := conv.ParseSelector(c.Selector)
+	if err != nil {
+		return conv.Rule{}, err
+	}
+	if c.ClientPort > 65535 || c.ServerPort > 65535 {
+		return conv.Rule{}, fmt.Errorf("%s: ports must be in 0-65535", c.Selector)
+	}
+	r := conv.Rule{Key: k, Client: client, NewClientPort: uint16(c.ClientPort), NewServerPort: uint16(c.ServerPort)}
+	var errs []error
+	if r.NewClientIP, err = addr("client IP", c.ClientIP); err != nil {
+		errs = append(errs, fmt.Errorf("%s: %w", c.Selector, err))
+	}
+	if r.NewServerIP, err = addr("server IP", c.ServerIP); err != nil {
+		errs = append(errs, fmt.Errorf("%s: %w", c.Selector, err))
+	}
+	for _, s := range c.Replace {
+		if strings.TrimSpace(s) == "" {
+			continue
+		}
+		sub, err := mutate.ParseSubst(s)
+		if err != nil {
+			errs = append(errs, fmt.Errorf("%s: %w", c.Selector, err))
+			continue
+		}
+		r.Replace = append(r.Replace, sub)
+	}
+	return r, errors.Join(errs...)
 }
 
 func positionFn(start uint64) func(*pcapio.Reader) error {
@@ -162,6 +207,21 @@ func (r *ReplayRequest) buildConfig() (replay.Config, replay.Transport, error) {
 		sub, e := mutate.ParseSubst(s)
 		add(e)
 		cfg.Rewrite.Replace = append(cfg.Rewrite.Replace, sub)
+	}
+	for i := range r.Conversations {
+		rule, e := r.Conversations[i].rule()
+		add(e)
+		cfg.Conversations = append(cfg.Conversations, rule)
+	}
+	cfg.OnlyConversations = r.OnlyConversations
+	if _, e := conv.NewSet(cfg.Conversations); e != nil { // duplicates, IP-family mismatch, ports on ICMP
+		add(e)
+	}
+	if r.OnlyConversations && len(r.Conversations) == 0 {
+		add(errors.New("\"replay only listed conversations\" needs at least one conversation"))
+	}
+	if tr == replay.TCP && len(r.Conversations) > 1 {
+		add(errors.New("TCP mode replays a single conversation: list only one"))
 	}
 	delay, e := dur("delay", r.Delay)
 	add(e)

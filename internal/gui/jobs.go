@@ -172,7 +172,7 @@ func (m *manager) StartStats(req RangeRequest, top int) error {
 	m.mu.Unlock()
 	m.logf("analysing %s", req.Path)
 	go func() {
-		st, rd, err := stats.Scan(ctx, req.Path, flt, positionFn(req.Start), req.Count, prog)
+		st, rd, err := stats.ScanWith(ctx, req.Path, flt, positionFn(req.Start), req.Count, prog, true)
 		if err == nil || errors.Is(err, context.Canceled) {
 			if st != nil {
 				sum := st.Summary(top)

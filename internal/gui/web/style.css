@@ -77,6 +77,27 @@ details { margin-top: 4px; } summary { cursor: pointer; color: var(--muted); mar
 .brow .val { color: var(--muted); font-size: 12.5px; text-align: right; min-width: 70px; }
 .empty { color: var(--muted); font-style: italic; }
 
+.tablewrap { overflow: auto; max-height: 460px; border: 1px solid var(--border); border-radius: 8px; margin-top: 10px; }
+table { border-collapse: collapse; width: 100%; font-variant-numeric: tabular-nums; }
+th, td { padding: 6px 10px; text-align: left; white-space: nowrap; border-bottom: 1px solid var(--border); font-size: 13px; }
+th { position: sticky; top: 0; background: var(--surface2); font-weight: 600; color: var(--muted); font-size: 12px; z-index: 1; }
+th small { font-weight: 400; } .num { text-align: right; }
+tbody tr:hover { background: var(--surface2); } tbody tr:last-child td { border-bottom: none; }
+td.mono { font-family: var(--mono); font-size: 12.5px; }
+.tag { font-size: 11px; font-weight: 600; padding: 1px 7px; border-radius: 99px; background: var(--bar); color: var(--accent); text-transform: uppercase; }
+input[type=search] { background: var(--surface2); border: 1px solid var(--border); border-radius: 7px; padding: 6px 9px; min-width: 240px; }
+button.small { padding: 3px 10px; font-size: 12.5px; }
+.count { display: inline-block; min-width: 18px; padding: 0 6px; border-radius: 99px; background: var(--accent); color: var(--accent-text); font-size: 11px; text-align: center; margin-left: 4px; }
+.warnbox { background: var(--warn-bg); color: var(--warn); border-radius: 8px; padding: 8px 10px; }
+details.card > summary { cursor: pointer; margin: 0; color: var(--text); }
+details.card[open] > summary { margin-bottom: 10px; }
+.rule { border: 1px solid var(--border); border-radius: 9px; padding: 10px 12px; margin: 8px 0; background: var(--surface2); }
+.rule-head { display: flex; align-items: center; gap: 8px; margin-bottom: 8px; }
+.rule-head .sel { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-family: var(--mono); font-size: 12.5px; }
+.rule .grid4 { margin-bottom: 6px; }
+.rule input[type=text], .rule input[type=number], .rule textarea { background: var(--surface); }
+.preview { font-family: var(--mono); font-size: 12px; color: var(--muted); margin-top: 4px; word-break: break-all; }
+.preview b { color: var(--accent); font-weight: 600; }
 .replay-layout { display: grid; grid-template-columns: minmax(0, 1fr) 360px; gap: 16px; align-items: start; }
 .sticky { position: sticky; top: 64px; }
 .live-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; margin: 10px 0; }
