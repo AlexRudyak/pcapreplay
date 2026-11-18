@@ -170,7 +170,7 @@ func RunTCP(ctx context.Context, cfg Config) (*Result, error) {
 	}
 	defer release()
 
-	cnt := &Counters{StartedAt: time.Now()}
+	cnt := cfg.counters()
 	stats := &TCPStats{Flow: key, Live: live}
 	res := &Result{Counters: cnt, TCP: stats}
 	// The producer gets its own context so it can be stopped after the replay

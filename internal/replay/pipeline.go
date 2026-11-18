@@ -38,15 +38,18 @@ func (t Transport) String() string {
 
 // Config is shared by the UDP and TCP engines.
 type Config struct {
-	Capture   string
-	Position  func(*pcapio.Reader) error // seeks to the first packet (may be nil)
-	Count     uint64                     // stop after this many matched packets (0 = all)
-	Loop      int                        // number of passes over the capture (min 1)
-	Filter    *filter.Filter
-	Rewrite   mutate.Rewrite
-	Pace      pace.Config
-	Backend   backend.Backend
-	Opts      backend.Options
+	Capture  string
+	Position func(*pcapio.Reader) error // seeks to the first packet (may be nil)
+	Count    uint64                     // stop after this many matched packets (0 = all)
+	Loop     int                        // number of passes over the capture (min 1)
+	Filter   *filter.Filter
+	Rewrite  mutate.Rewrite
+	Pace     pace.Config
+	Backend  backend.Backend
+	Opts     backend.Options
+	// Progress, if non-nil, receives the live counters so another goroutine
+	// (a GUI) can poll them while the run is active.
+	Progress  *Counters
 	QueueSize int // bounded queue depth between producer and sender (default 4096)
 	Batch     int // max packets per SendBatch in burst mode (default 64)
 
@@ -96,6 +99,16 @@ type feedOpts struct {
 	accept   func(*decode.Info) bool // extra per-packet test (e.g. flow tuple); may be nil
 	rewrite  *mutate.Rewrite         // applied by the producer; nil = none
 	finalize bool                    // repair lengths/checksums before queueing
+}
+
+// counters returns the caller-supplied Progress (reset) or a fresh Counters.
+func (c *Config) counters() *Counters {
+	cnt := c.Progress
+	if cnt == nil {
+		cnt = &Counters{}
+	}
+	cnt.StartedAt = time.Now()
+	return cnt
 }
 
 func (c *Config) defaults() {
@@ -213,7 +226,7 @@ func RunUDP(ctx context.Context, cfg Config) (*Result, error) {
 	}
 	defer cfg.Backend.Close()
 
-	cnt := &Counters{StartedAt: time.Now()}
+	cnt := cfg.counters()
 	ctx, cancel := context.WithCancel(ctx)
 	defer cancel()
 	q := make(chan item, cfg.QueueSize)
