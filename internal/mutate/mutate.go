@@ -259,6 +259,42 @@ func (b *Buf) SetSeqAck(seq, ack uint32) {
 	b.In.Seq, b.In.Ack = seq, ack
 }
 
+// SetWindow overwrites the TCP receive window.
+func (b *Buf) SetWindow(w uint16) {
+	binary.BigEndian.PutUint16(b.B[b.In.L4Off+14:], w)
+	b.In.Window = w
+}
+
+// StripTCPOptions removes every TCP option (timestamps, SACK, window scale...).
+// A replayed segment must not carry options that were negotiated in the
+// original, different connection. Lengths are repaired by Finalize.
+func (b *Buf) StripTCPOptions() {
+	in := &b.In
+	if in.Proto != decode.ProtoTCP || in.TCPHdr <= 20 {
+		return
+	}
+	extra := in.TCPHdr - 20
+	copy(b.B[in.L4Off+20:], b.B[in.PayOff:]) // overlapping move is safe in Go
+	b.B = b.B[:len(b.B)-extra]
+	b.B[in.L4Off+12] = 5<<4 | b.B[in.L4Off+12]&0x0f
+	in.TCPHdr, in.PayOff, in.PayEnd = 20, in.PayOff-extra, in.PayEnd-extra
+}
+
+// TrimPayloadFront drops the first n payload bytes and advances the TCP
+// sequence number accordingly (used to start a replay mid-segment).
+func (b *Buf) TrimPayloadFront(n int) {
+	in := &b.In
+	if n <= 0 || in.PayOff == 0 || n > in.PayEnd-in.PayOff {
+		return
+	}
+	copy(b.B[in.PayOff:], b.B[in.PayOff+n:])
+	b.B = b.B[:len(b.B)-n]
+	in.PayEnd -= n
+	if in.Proto == decode.ProtoTCP {
+		b.SetSeqAck(in.Seq+uint32(n), in.Ack)
+	}
+}
+
 // SetFlags overwrites the TCP flag byte.
 func (b *Buf) SetFlags(f uint8) {
 	b.B[b.In.L4Off+13] = f

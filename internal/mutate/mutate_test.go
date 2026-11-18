@@ -95,6 +95,27 @@ func TestLoadTrimsPaddingAndRejectsTruncated(t *testing.T) {
 	}
 }
 
+func TestStripOptionsAndTrim(t *testing.T) {
+	opts := []byte{1, 1, 8, 10, 0, 0, 0, 1, 0, 0, 0, 2} // NOP NOP timestamps
+	frame := craft.TCP(nil, &craft.Spec{Src: ip("1.1.1.1"), Dst: ip("2.2.2.2"), SrcPort: 1, DstPort: 2,
+		Seq: 1000, Flags: decode.ACK, Options: opts, Payload: []byte("0123456789")})
+	b := Get()
+	defer Put(b)
+	if err := b.Load(pcapio.LinkEthernet, frame); err != nil || b.In.TCPHdr != 32 {
+		t.Fatalf("load: %v hdr=%d", err, b.In.TCPHdr)
+	}
+	b.StripTCPOptions()
+	b.TrimPayloadFront(4)
+	b.SetWindow(4242)
+	b.Finalize()
+	verify(t, b)
+	var in decode.Info
+	decode.Decode(pcapio.LinkEthernet, b.B, &in)
+	if in.TCPHdr != 20 || string(in.Payload(b.B)) != "456789" || in.Seq != 1004 || in.Window != 4242 {
+		t.Fatalf("unexpected: hdr=%d payload=%q seq=%d win=%d", in.TCPHdr, in.Payload(b.B), in.Seq, in.Window)
+	}
+}
+
 func TestFamilyMismatch(t *testing.T) {
 	frame := craft.UDP(nil, &craft.Spec{Src: ip("1.1.1.1"), Dst: ip("2.2.2.2"), SrcPort: 1, DstPort: 2})
 	b := Get()
