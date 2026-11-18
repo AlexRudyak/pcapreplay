@@ -134,7 +134,7 @@ func (l *Linux) SendBatch(pkts [][]byte) (int, error) {
 		}
 		off := 0
 		for off < n {
-			r, _, errno := syscall.Syscall6(sysSendmmsg,uintptr(l.sfd),
+			r, _, errno := syscall.Syscall6(sysSendmmsg, uintptr(l.sfd),
 				uintptr(unsafe.Pointer(&l.msgs[off])), uintptr(n-off), 0, 0, 0)
 			if errno != 0 {
 				if errno == syscall.EAGAIN || errno == syscall.ENOBUFS || errno == syscall.EINTR {
