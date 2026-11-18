@@ -639,7 +639,6 @@ func (s *tcpSession) replayOne(it item, pc *pace.Pacer, cnt *Counters, local, us
 		cnt.SendErrs.Add(1)
 		return fmt.Errorf("send: %w", err)
 	}
-	cnt.Matched.Add(1)
 	cnt.Sent.Add(1)
 	cnt.Bytes.Add(uint64(len(b.IPPacket())))
 	if seqLT(s.sndNxt, end) {
