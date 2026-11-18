@@ -90,8 +90,11 @@ optional PATH entry, and registers a normal uninstaller that removes everything 
 Two executables are installed: `pktreplay.exe` (console, CLI) and `pktreplay-gui.exe` (windowless; opens the
 GUI, shows a dialog if it cannot start). Silent install for deployment:
 `pktreplay-setup-0.1.0.exe /VERYSILENT /CURRENTUSER /TASKS=addpath` (use `/ALLUSERS` for a machine-wide install).
-To bundle the WinDivert driver, put the official `WinDivert.dll` and `WinDivert64.sys` in `installer\redist`
-before building (mind WinDivert's licence). The installer is not code-signed, so Windows SmartScreen may show an
+The installer bundles the WinDivert 2.2.2 driver when its files are staged in `installer\redist`: run
+`installer\fetch-windivert.ps1` (downloads, or `-ZipPath` for a local `WinDivert-2.2.2-A.zip`), which checks pinned
+SHA-256 hashes, the driver's Authenticode signature and the licence text, then rebuild. WinDivert is
+LGPLv3/GPLv2: the installer ships `WinDivert-LICENSE.txt` and the binaries must stay unmodified. Some antivirus
+products flag WinDivert (Windows Defender does), so the files may need an exclusion on the build machine. The installer is not code-signed, so Windows SmartScreen may show an
 "unknown publisher" warning; sign it with `signtool` for distribution.
 
 ## Setup
