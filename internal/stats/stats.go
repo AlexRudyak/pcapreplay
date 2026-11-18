@@ -11,7 +11,7 @@ import (
 )
 
 // TalkerCapacity bounds the number of distinct IPs tracked for "top talkers".
-const TalkerCapacity = 4096
+const TalkerCapacity = 16384
 
 // Stats accumulates capture-wide counters. Memory use is constant: scalar
 // counters, two 64K port tables (512 KiB) and one bounded sketch.
@@ -165,7 +165,7 @@ func (s *Stats) Report(w io.Writer, top int) {
 	fmt.Fprintf(w, "  (IPv4 %d, IPv6 %d)\n", s.IPv4, s.IPv6)
 	fmt.Fprintf(w, "\nTop talkers (bytes, bounded sketch of %d keys):\n", TalkerCapacity)
 	for _, t := range s.TopTalkers(top) {
-		fmt.Fprintf(w, "  %-40s %12s  (±%s)\n", t.Addr, human(t.Bytes), human(t.MaxOver))
+		fmt.Fprintf(w, "  %-40s %12s  (+0..%s)\n", t.Addr, human(t.Bytes), human(t.MaxOver))
 	}
 	for _, pr := range []struct {
 		name  string
