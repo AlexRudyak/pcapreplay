@@ -19,7 +19,11 @@
   powershell -File installer\fetch-windivert.ps1
   powershell -File installer\fetch-windivert.ps1 -ExpectedSha256 <hash you verified independently>
 #>
-param([string]$ExpectedSha256 = "")
+param(
+  [string]$ExpectedSha256 = "",
+  # Use an already downloaded WinDivert-2.2.2-A.zip instead of downloading it (the file is only read).
+  [string]$ZipPath = ""
+)
 $ErrorActionPreference = "Stop"
 $url      = "https://github.com/basil00/WinDivert/releases/download/v2.2.2/WinDivert-2.2.2-A.zip"
 $expected = 405137
@@ -28,9 +32,14 @@ $redist   = Join-Path $root "installer\redist"
 $work     = Join-Path ([IO.Path]::GetTempPath()) ("windivert-" + [guid]::NewGuid().ToString("N"))
 New-Item -ItemType Directory -Force $work | Out-Null   # an empty, isolated directory for the untrusted download
 try {
-  $zip = Join-Path $work "WinDivert-2.2.2-A.zip"
-  Write-Host "Downloading $url"
-  Invoke-WebRequest -Uri $url -OutFile $zip -UseBasicParsing
+  if ($ZipPath) {
+    $zip = (Resolve-Path $ZipPath).Path
+    Write-Host "Using local archive $zip"
+  } else {
+    $zip = Join-Path $work "WinDivert-2.2.2-A.zip"
+    Write-Host "Downloading $url"
+    Invoke-WebRequest -Uri $url -OutFile $zip -UseBasicParsing
+  }
 
   try { $size = (Get-Item $zip -ErrorAction Stop).Length; $hash = (Get-FileHash $zip -Algorithm SHA256 -ErrorAction Stop).Hash.ToLower() }
   catch {

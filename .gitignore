@@ -10,3 +10,5 @@ WinDivert*.sys
 !samples/*.pcap
 /dist/
 /installer/redist/
+/WinDivert-*.zip
+/installer/vendor/
