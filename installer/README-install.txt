@@ -10,6 +10,12 @@ START IT
 
 A sample capture is in the "samples" folder of the install directory.
 
+If the interface does not appear or closes, read the log:
+  %LOCALAPPDATA%\pktreplay\pktreplay-gui.log
+Starting pktreplay.exe by double-click or "Run as administrator" also opens the interface (keep that
+console window open while you use it). If your browser cannot be launched, pktreplay shows a dialog
+with the address to open.
+
 WHAT WORKS WITHOUT ANY EXTRA FILES
   Analysis, conversation lists, filters, dry-run replays and recording work
   immediately and need no privileges.

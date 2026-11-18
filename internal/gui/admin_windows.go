@@ -7,6 +7,9 @@ import (
 	"unsafe"
 )
 
+// IsElevated reports whether the process runs with administrator rights.
+func IsElevated() bool { return isElevated() }
+
 // isElevated reports whether the process runs with an elevated (admin) token.
 func isElevated() bool {
 	p, err := syscall.GetCurrentProcess()

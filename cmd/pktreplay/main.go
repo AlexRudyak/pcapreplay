@@ -4,6 +4,7 @@ package main
 import (
 	"fmt"
 	"os"
+	"runtime/debug"
 	"strings"
 )
 
@@ -14,6 +15,11 @@ var (
 	version        = "0.1.0"
 	defaultCommand = ""
 )
+
+// ownConsole is true when the console window belongs to this process alone
+// (exe double-clicked or "Run as administrator"), so it must not vanish before
+// the user can read what it printed.
+var ownConsole bool
 
 const usage = `pktreplay - streaming PCAP/PCAPNG analysis and replay
 
@@ -26,12 +32,35 @@ Usage:
   pktreplay version                      print the version
 
 Run 'pktreplay <command> -h' for the flags of each command.
+Started without arguments from Explorer, pktreplay opens the GUI.
 `
 
+// recoverCrash turns a panic into a visible message and a log entry instead of a
+// window that silently disappears.
+func recoverCrash() {
+	if r := recover(); r != nil {
+		msg := fmt.Sprintf("pktreplay crashed: %v", r)
+		fmt.Fprintf(os.Stderr, "%s\n%s\n", msg, debug.Stack())
+		if logPath != "" {
+			msg += "\n\nDetails: " + logPath
+		}
+		reportError(msg)
+		holdWindow()
+		os.Exit(3)
+	}
+}
+
 func main() {
+	initLogging()
+	defer recoverCrash()
 	args := os.Args
 	if defaultCommand != "" && (len(args) < 2 || strings.HasPrefix(args[1], "-")) {
 		args = append([]string{args[0], defaultCommand}, args[1:]...)
+	} else if len(args) < 2 && consoleSoleOwner() {
+		// Double-clicked (or "Run as administrator") with no arguments: opening the GUI is
+		// far more useful than printing usage into a window that closes at once.
+		args = []string{args[0], "gui"}
+		ownConsole = true
 	}
 	if len(args) < 2 {
 		fmt.Fprint(os.Stderr, usage)
@@ -57,10 +86,16 @@ func main() {
 		return
 	default:
 		reportError(fmt.Sprintf("unknown command %q\n\n%s", args[1], usage))
+		holdWindow()
 		os.Exit(2)
 	}
 	if err != nil {
-		reportError("error: " + err.Error())
+		msg := "error: " + err.Error()
+		if logPath != "" {
+			msg += "\n\nDetails: " + logPath
+		}
+		reportError(msg)
+		holdWindow()
 		os.Exit(1)
 	}
 }
