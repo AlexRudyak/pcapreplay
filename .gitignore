@@ -7,3 +7,4 @@
 *.idx
 WinDivert*.dll
 WinDivert*.sys
+!samples/*.pcap

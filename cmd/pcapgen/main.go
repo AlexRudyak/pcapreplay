@@ -22,8 +22,16 @@ func main() {
 	hosts := flag.Int("hosts", 5000, "distinct client hosts")
 	stream := flag.Int("stream", 0, "instead write ONE TCP conversation with this many client data segments")
 	nosyn := flag.Bool("nosyn", false, "with -stream: omit the handshake (capture starts mid-stream)")
+	sample := flag.Bool("sample", false, "write a small realistic mixed capture (ARP, DNS, HTTP/TCP, ICMP, syslog)")
 	flag.Parse()
 
+	if *sample {
+		if err := genSample(*out); err != nil {
+			fmt.Fprintln(os.Stderr, err)
+			os.Exit(1)
+		}
+		return
+	}
 	if *stream > 0 {
 		if err := genStream(*out, *stream, !*nosyn); err != nil {
 			fmt.Fprintln(os.Stderr, err)

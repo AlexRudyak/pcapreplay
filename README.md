@@ -1,4 +1,4 @@
-# pktreplay
+﻿# pktreplay
 
 High-throughput, low-memory PCAP/PCAPNG analysis and replay tool in pure Go: no cgo, no third-party
 dependencies, one codebase for Windows and Linux. Design and measurements: [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md).
@@ -128,6 +128,14 @@ Filter grammar: `src_ip|dst_ip|ip == addr[/cidr]`, `src_port|dst_port|port == N`
 `proto == tcp|udp|icmp|icmp6|arp|ip|ipv6|N`, `tcp_flags == syn+ack`, `payload contains "text"|0xHEX`,
 `payload ~ "regexp"`, combined with `AND`/`OR`/`NOT`/`&&`/`||`/`!` and parentheses.
 
+## Sample capture
+`samples/sample-mixed.pcap` is a 23-packet recording (ARP, DNS, an HTTP GET/200 over TCP with handshake and FIN,
+ICMP pings, UDP syslog) that opens in tshark/Wireshark and in the GUI. Regenerate it with
+`pcapgen -sample -o samples/sample-mixed.pcap`. For example:
+```bash
+pktreplay stats samples/sample-mixed.pcap
+pktreplay replay -mode tcp -backend null -burst samples/sample-mixed.pcap   # picks the HTTP flow
+```n
 ## Benchmarking
 ```bash
 go build -o bin/pcapgen ./cmd/pcapgen
