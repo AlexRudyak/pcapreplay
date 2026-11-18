@@ -81,6 +81,19 @@ GOOS=linux   GOARCH=arm64 go build -o bin/pktreplay-linux-arm64 ./cmd/pktreplay
 ```
 PowerShell: `$env:GOOS="linux"; $env:GOARCH="amd64"; go build -o bin\pktreplay-linux .\cmd\pktreplay`.
 
+## Windows installer
+`powershell -File installer\build.ps1 [-Version 0.2.0]` builds `dist\pktreplay-setup-<version>.exe` (plus a
+`.sha256` file) with [Inno Setup](https://jrsoftware.org/isinfo.php) (`winget install JRSoftware.InnoSetup`).
+It installs per user by default (no UAC prompt; "all users" is offered), adds Start Menu shortcuts
+(**pktreplay**, and **pktreplay (Administrator)** for raw injection), an optional desktop shortcut and an
+optional PATH entry, and registers a normal uninstaller that removes everything it added.
+Two executables are installed: `pktreplay.exe` (console, CLI) and `pktreplay-gui.exe` (windowless; opens the
+GUI, shows a dialog if it cannot start). Silent install for deployment:
+`pktreplay-setup-0.1.0.exe /VERYSILENT /CURRENTUSER /TASKS=addpath` (use `/ALLUSERS` for a machine-wide install).
+To bundle the WinDivert driver, put the official `WinDivert.dll` and `WinDivert64.sys` in `installer\redist`
+before building (mind WinDivert's licence). The installer is not code-signed, so Windows SmartScreen may show an
+"unknown publisher" warning; sign it with `signtool` for distribution.
+
 ## Setup
 
 ### Linux

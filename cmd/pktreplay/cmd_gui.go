@@ -14,8 +14,6 @@ import (
 	"github.com/sasha/pktreplay/internal/gui"
 )
 
-const version = "0.1.0"
-
 func cmdGUI(args []string) error {
 	fs := flag.NewFlagSet("gui", flag.ExitOnError)
 	addr := fs.String("addr", "127.0.0.1:0", "listen address (loopback only; port 0 picks a free port)")

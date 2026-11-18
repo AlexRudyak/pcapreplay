@@ -1,0 +1,69 @@
+<#
+.SYNOPSIS
+  Builds the pktreplay Windows installer: dist\pktreplay-setup-<version>.exe
+
+.DESCRIPTION
+  1. builds pktreplay.exe (console, CLI) and pktreplay-gui.exe (windowless, opens the GUI)
+  2. renders the application icon
+  3. stages files under dist\stage
+  4. runs Inno Setup's ISCC.exe
+
+  Requires Go and Inno Setup 6 (winget install JRSoftware.InnoSetup).
+  Optional: put the official WinDivert.dll and WinDivert64.sys in installer\redist to bundle them.
+
+.EXAMPLE
+  powershell -File installer\build.ps1 -Version 0.2.0
+#>
+param(
+  [string]$Version = "0.1.0",
+  [string]$Iscc = ""
+)
+$ErrorActionPreference = "Stop"
+$root = Split-Path -Parent $PSScriptRoot
+Set-Location $root
+
+# --- tools ---
+$env:Path = [Environment]::GetEnvironmentVariable("Path", "Machine") + ";" + [Environment]::GetEnvironmentVariable("Path", "User")
+if (-not (Get-Command go -ErrorAction SilentlyContinue)) { throw "Go is not installed or not on PATH." }
+if (-not $Iscc) {
+  $Iscc = @("$env:LOCALAPPDATA\Programs\Inno Setup 6\ISCC.exe", "${env:ProgramFiles(x86)}\Inno Setup 6\ISCC.exe",
+            "$env:ProgramFiles\Inno Setup 6\ISCC.exe") | Where-Object { Test-Path $_ } | Select-Object -First 1
+}
+if (-not $Iscc -or -not (Test-Path $Iscc)) { throw "Inno Setup 6 not found. Install it: winget install JRSoftware.InnoSetup" }
+
+$commit = ""
+try { $commit = (git rev-parse --short HEAD 2>$null) } catch {}
+$verString = if ($commit) { "$Version+$commit" } else { $Version }
+
+# --- stage ---
+$stage = Join-Path $root "dist\stage"
+if (Test-Path $stage) { Remove-Item $stage -Recurse -Force }
+New-Item -ItemType Directory -Force "$stage\docs", "$stage\samples" | Out-Null
+
+$env:GOOS = "windows"; $env:GOARCH = "amd64"; $env:CGO_ENABLED = "0"
+$common = @("-trimpath")
+Write-Host "Building pktreplay.exe ($verString)..."
+go build @common -ldflags "-s -w -X main.version=$verString" -o "$stage\pktreplay.exe" .\cmd\pktreplay
+if ($LASTEXITCODE) { throw "go build failed" }
+Write-Host "Building pktreplay-gui.exe..."
+go build @common -ldflags "-s -w -H=windowsgui -X main.version=$verString -X main.defaultCommand=gui" -o "$stage\pktreplay-gui.exe" .\cmd\pktreplay
+if ($LASTEXITCODE) { throw "go build (gui) failed" }
+Remove-Item Env:GOOS, Env:GOARCH, Env:CGO_ENABLED
+
+Write-Host "Rendering icon..."
+go run .\cmd\mkicon -o "$stage\pktreplay.ico"
+if ($LASTEXITCODE) { throw "icon generation failed" }
+
+Copy-Item README.md, installer\README-install.txt $stage
+Copy-Item docs\*.md "$stage\docs"
+Copy-Item samples\*.pcap "$stage\samples"
+
+# --- compile the installer ---
+Write-Host "Compiling installer with Inno Setup..."
+& $Iscc "/DAppVersion=$Version" "/Qp" "$root\installer\pktreplay.iss"
+if ($LASTEXITCODE) { throw "ISCC failed" }
+
+$setup = Join-Path $root "dist\pktreplay-setup-$Version.exe"
+$hash = (Get-FileHash $setup -Algorithm SHA256).Hash.ToLower()
+"$hash  pktreplay-setup-$Version.exe" | Set-Content "$setup.sha256" -Encoding ascii
+Write-Host ("`nBuilt {0} ({1:N1} MB)`nSHA-256 {2}" -f $setup, ((Get-Item $setup).Length / 1MB), $hash)
