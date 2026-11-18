@@ -58,6 +58,15 @@ Copy-Item README.md, installer\README-install.txt $stage
 Copy-Item docs\*.md "$stage\docs"
 Copy-Item samples\*.pcap "$stage\samples"
 
+# --- WinDivert (optional, see fetch-windivert.ps1) ---
+$redist = Join-Path $root "installer\redist"
+$bundled = (Test-Path "$redist\WinDivert.dll") -and (Test-Path "$redist\WinDivert64.sys")
+if ($bundled -and -not (Test-Path "$redist\WinDivert-LICENSE.txt")) {
+  throw "installer\redist has WinDivert binaries but no WinDivert-LICENSE.txt: the licence text must be shipped with them."
+}
+if ($bundled) { Write-Host "WinDivert: bundling files from installer\redist" }
+else { Write-Host "WinDivert: not bundled (run installer\fetch-windivert.ps1 to add it)" }
+
 # --- compile the installer ---
 Write-Host "Compiling installer with Inno Setup..."
 & $Iscc "/DAppVersion=$Version" "/Qp" "$root\installer\pktreplay.iss"

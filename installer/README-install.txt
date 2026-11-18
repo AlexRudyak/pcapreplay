@@ -15,8 +15,11 @@ WHAT WORKS WITHOUT ANY EXTRA FILES
   immediately and need no privileges.
 
 SENDING PACKETS ONTO THE NETWORK (raw injection)
-  Windows uses the WinDivert driver, which is NOT part of this installer unless
-  it was bundled when the installer was built. If it is missing, pktreplay says so.
+  Windows uses the WinDivert driver. If WinDivert.dll and WinDivert64.sys are in the install
+  folder (this installer bundles them when they were available at build time; the licence is in
+  WinDivert-LICENSE.txt), just start "pktreplay (Administrator)". Some antivirus products flag
+  WinDivert because the same technique is abused by malware; allow it only if you trust this
+  installer. If the files are missing, pktreplay says so and you can add them as follows.
     1. Download the official WinDivert 2.2.x release from https://reqrypt.org/windivert.html
        and verify it.
     2. Copy WinDivert.dll and WinDivert64.sys (x64) into the pktreplay install folder

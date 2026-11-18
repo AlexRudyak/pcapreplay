@@ -62,6 +62,8 @@ Source: "{#Stage}\samples\*"; DestDir: "{app}\samples"; Flags: ignoreversion rec
 #if FileExists(AddBackslash(SourcePath) + "redist\WinDivert64.sys")
 Source: "redist\WinDivert.dll"; DestDir: "{app}"; Flags: ignoreversion
 Source: "redist\WinDivert64.sys"; DestDir: "{app}"; Flags: ignoreversion
+; WinDivert is LGPLv3/GPLv2: its licence text must accompany the binaries.
+Source: "redist\WinDivert-LICENSE.txt"; DestDir: "{app}"; Flags: ignoreversion
 #endif
 
 [Icons]
