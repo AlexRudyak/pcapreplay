@@ -85,13 +85,31 @@
         <div class="card" id="convRules">
           <h3>Conversations to change <small class="muted">(optional)</small></h3>
           <p class="hint" id="convEmpty">Nothing selected: every conversation in the filtered capture is replayed exactly as recorded.
-            Add conversations from the <b>Analyze</b> tab (or paste a selector below) to change their addresses, ports or payload. Only the conversations you list are modified.</p>
-          <div id="ruleList"></div>
-          <div class="row">
-            <input id="selectorIn" class="grow mono" type="text" placeholder="tcp/192.168.1.50:51234/192.168.1.10:80" spellcheck="false" autocomplete="off">
-            <button id="addSelector" type="button">Add by selector</button>
+            Tick conversations below to change their addresses, ports or payload. Only the ones you tick are modified.</p>
+
+          <div id="picker">
+            <div class="row">
+              <b class="grow">Conversations in the analyzed capture <small id="pickCount" class="muted"></small></b>
+              <input id="pickSearch" type="search" placeholder="Filter list: 10.0.0.2, :443, closed…" spellcheck="false">
+            </div>
+            <div id="pickStale" class="hint warnbox" hidden></div>
+            <div id="pickEmpty" class="hint"></div>
+            <ul id="pickList" class="picklist"></ul>
+            <div class="row">
+              <button id="pickAnalyze" class="small" type="button">Analyze capture</button>
+              <button id="pickClear" class="small" type="button">Clear selection</button>
+              <small id="pickNote" class="hint grow"></small>
+            </div>
           </div>
-          <small id="selectorErr" class="hint"></small>
+
+          <div id="ruleList"></div>
+          <details><summary class="muted">Advanced: add a conversation by selector</summary>
+            <div class="row">
+              <input id="selectorIn" class="grow mono" type="text" placeholder="tcp/192.168.1.50:51234/192.168.1.10:80" spellcheck="false" autocomplete="off">
+              <button id="addSelector" type="button">Add by selector</button>
+            </div>
+            <small id="selectorErr" class="hint"></small>
+          </details>
           <label class="check"><input id="onlyListed" type="checkbox"> <span id="onlyListedText">Replay only the listed conversations (skip all others)</span></label>
         </div>
 

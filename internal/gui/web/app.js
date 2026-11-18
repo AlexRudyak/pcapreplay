@@ -7,6 +7,7 @@ const el = (tag, cls, text) => { const e = document.createElement(tag); if (cls)
 
 let mode = "";          // "tcp" | "udp" | "" (must be chosen explicitly)
 let lastState = "idle";
+let lastKind = "";
 let poller = null;
 let info = {};
 
@@ -96,11 +97,14 @@ $("#browse").onclick = () => {
 $("#up").onclick = () => parentDir && loadDir(parentDir);
 
 // ---------- analysis ----------
-$("#runStats").onclick = async () => {
+let analysisSource = null; // capture/filter/range the current conversation list was built from
+async function runAnalysis() {
   $("#statsError").hidden = true;
-  try { await api("/api/stats", { ...range(), top: 15 }); startPolling(); }
-  catch (e) { showErr("#statsError", e.message); }
-};
+  const src = range();
+  try { await api("/api/stats", { ...src, top: 15 }); analysisSource = src; startPolling(); }
+  catch (e) { showErr("#statsError", e.message); showErr("#replayError", e.message); }
+}
+$("#runStats").onclick = runAnalysis;
 $("#stopStats").onclick = () => api("/api/cancel", {}).catch(() => {});
 
 function showErr(sel, msg) { const e = $(sel); e.textContent = msg; e.hidden = !msg; }
@@ -133,6 +137,7 @@ function renderSummary(s) {
   bars($("#udpPorts"), s.udpPorts, (p) => String(p.port), (p) => p.packets, (n) => fmtInt(n) + " pkts");
   convData = s;
   renderConversations();
+  renderPicker();
 }
 
 // ---------- conversations (analysis) ----------
@@ -240,10 +245,72 @@ function renderRules() {
     box.append(card);
   });
   $("#convEmpty").hidden = rules.length > 0;
+  renderPicker();
   const badge = $("#ruleBadge"); badge.hidden = rules.length === 0; badge.textContent = String(rules.length);
   updateOnly();
   refreshButtons();
 }
+
+// ---------- pick conversations from the analysis ----------
+function toggleConversation(c, on) {
+  if (on) {
+    if (mode === "tcp") rules.length = 0; // TCP replays exactly one conversation
+    addRule(c.selector);
+  } else {
+    const i = ruleIndex(c.selector);
+    if (i >= 0) rules.splice(i, 1);
+    renderRules(); renderConversations();
+  }
+}
+
+function renderPicker() {
+  const list = $("#pickList"), keep = list.scrollTop;
+  list.replaceChildren();
+  const s = convData;
+  const analyzing = lastState === "running" && lastKind === "stats";
+  $("#pickAnalyze").disabled = lastState === "running" || !$("#path").value.trim();
+  $("#pickAnalyze").textContent = s ? "Re-analyze capture" : "Analyze capture";
+  $("#pickClear").disabled = rules.length === 0;
+
+  const cur = range(), a = analysisSource;
+  const stale = $("#pickStale");
+  stale.hidden = !(s && a && (cur.path !== a.path || cur.filter !== a.filter || cur.start !== a.start || cur.count !== a.count));
+  if (!stale.hidden) stale.textContent = "This list comes from an earlier analysis: the capture, filter or packet range has changed since. Re-analyze to refresh it.";
+
+  if (!s || !s.conversations) {
+    $("#pickEmpty").textContent = analyzing ? "Analyzing the capture…" : "No analysis yet: analyze the capture to list its conversations here.";
+    $("#pickCount").textContent = ""; $("#pickNote").textContent = "";
+    list.hidden = true;
+    return;
+  }
+  list.hidden = false;
+  $("#pickEmpty").textContent = "";
+  const want = mode === "tcp" ? ["tcp"] : mode === "udp" ? ["udp"] : ["tcp", "udp"];
+  const q = $("#pickSearch").value.trim().toLowerCase();
+  const all = s.conversations.filter((c) => want.includes(c.proto));
+  const rows = all.filter((c) => !q || (c.selector + " " + c.state).toLowerCase().includes(q));
+  $("#pickCount").textContent = "(" + fmtInt(rows.length) + (q ? " of " + fmtInt(all.length) : "") + ")";
+  $("#pickNote").textContent = mode === "tcp" ? "TCP mode replays one conversation: ticking another replaces the selection."
+    : mode === "udp" ? "Showing UDP conversations only (the only ones UDP mode replays)."
+    : "Choose TCP or UDP above to show just the conversations that mode can replay (ICMP/ARP are never replayed).";
+  if (!rows.length) { list.append(el("li", "none", all.length ? "No conversation matches the filter." : "This capture has no " + want.join("/").toUpperCase() + " conversations.")); return; }
+  for (const c of rows.slice(0, 300)) {
+    const li = el("li", ruleIndex(c.selector) >= 0 ? "on" : "");
+    const cb = el("input"); cb.type = "checkbox"; cb.checked = ruleIndex(c.selector) >= 0;
+    cb.onclick = (e) => e.stopPropagation();
+    cb.onchange = () => toggleConversation(c, cb.checked);
+    li.onclick = () => cb.click();
+    const ep = (ip, p) => ip.includes(":") ? "[" + ip + "]:" + p : ip + ":" + p;
+    li.append(cb, el("span", "tag", c.proto), el("span", "ends", ep(c.clientIp, c.clientPort) + "  →  " + ep(c.serverIp, c.serverPort)),
+      el("span", "meta", fmtInt(c.packets) + " pkts · " + fmtBytes(c.bytes) + (c.proto === "tcp" ? " · " + c.state : "")));
+    list.append(li);
+  }
+  list.scrollTop = keep;
+}
+$("#pickSearch").addEventListener("input", renderPicker);
+$("#pickAnalyze").onclick = runAnalysis;
+$("#pickClear").onclick = () => { rules.length = 0; renderRules(); renderConversations(); };
+for (const id of ["#path", "#filter", "#start", "#count"]) $(id).addEventListener("input", renderPicker);
 
 $("#addSelector").onclick = () => {
   const v = $("#selectorIn").value.trim();
@@ -275,8 +342,13 @@ $$("#modeSeg button").forEach((b) => b.onclick = () => {
   mode = b.dataset.mode;
   $$("#modeSeg button").forEach((x) => x.setAttribute("aria-checked", String(x === b)));
   $("#tcpCard").hidden = mode !== "tcp";
-  updateOnly();
-  refreshButtons();
+  // A listed conversation of the other protocol cannot be replayed in this mode.
+  const before = rules.length;
+  for (let i = rules.length - 1; i >= 0; i--) if (rules[i].proto !== mode) rules.splice(i, 1);
+  const dropped = before - rules.length;
+  renderRules(); // also refreshes the picker, the "only listed" box and the buttons
+  renderConversations();
+  if (dropped) $("#pickNote").textContent = "Removed " + dropped + " listed conversation" + (dropped > 1 ? "s" : "") + " that " + mode.toUpperCase() + " mode cannot replay.";
 });
 function paceVisibility() {
   const m = $("#paceMode").value;
@@ -318,7 +390,7 @@ function refreshButtons() {
   if (!$("#path").value.trim()) hint.textContent = "Choose a capture file first.";
   else if (!mode) hint.textContent = "Select TCP or UDP above: the transmission mode is never guessed.";
   else if (tooMany) hint.textContent = "TCP mode replays a single conversation: remove all but one from the list.";
-  else if (mode === "tcp" && rules.length === 0) hint.textContent = "No conversation chosen: TCP will replay the first one that matches the filter. Add one from Analyze to pick.";
+  else if (mode === "tcp" && rules.length === 0) hint.textContent = "No conversation chosen: TCP will replay the first one that matches the filter. Tick one in the conversation list to choose.";
   else if (info.elevated === false && $("#backend").value !== "null") hint.textContent = "Raw injection needs elevated privileges; start pktreplay as Administrator/root, or use Dry run.";
   else hint.textContent = "Ready.";
 }
@@ -334,7 +406,7 @@ function startPolling() {
 async function poll() {
   let s;
   try { s = await api("/api/status"); } catch (_) { return; }
-  lastState = s.state;
+  lastState = s.state; lastKind = s.kind;
   const running = s.state === "running";
   const isStats = s.kind === "stats", isReplay = s.kind === "replay";
 
@@ -391,5 +463,6 @@ async function poll() {
     b.className = "badge " + (info.elevated ? "ok" : "warn");
   } catch (e) { showErr("#statsError", e.message); }
   refreshButtons();
+  renderPicker();
   poll(); // pick up a job that is already running (page reload)
 })();

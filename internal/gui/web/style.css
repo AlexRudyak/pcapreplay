@@ -91,6 +91,14 @@ button.small { padding: 3px 10px; font-size: 12.5px; }
 .warnbox { background: var(--warn-bg); color: var(--warn); border-radius: 8px; padding: 8px 10px; }
 details.card > summary { cursor: pointer; margin: 0; color: var(--text); }
 details.card[open] > summary { margin-bottom: 10px; }
+.picklist { list-style: none; margin: 8px 0; padding: 0; max-height: 230px; overflow: auto; border: 1px solid var(--border); border-radius: 8px; }
+.picklist li { display: grid; grid-template-columns: auto auto minmax(0, 1fr) auto; gap: 10px; align-items: center; padding: 6px 10px; border-bottom: 1px solid var(--border); cursor: pointer; font-size: 13px; }
+.picklist li:last-child { border-bottom: none; } .picklist li:hover { background: var(--surface2); }
+.picklist li.on { background: var(--bar); }
+.picklist input { margin: 0; width: auto; }
+.picklist .ends { font-family: var(--mono); font-size: 12.5px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.picklist .meta { color: var(--muted); font-size: 12px; white-space: nowrap; }
+.picklist .none { display: block; color: var(--muted); font-style: italic; cursor: default; }
 .rule { border: 1px solid var(--border); border-radius: 9px; padding: 10px 12px; margin: 8px 0; background: var(--surface2); }
 .rule-head { display: flex; align-items: center; gap: 8px; margin-bottom: 8px; }
 .rule-head .sel { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-family: var(--mono); font-size: 12.5px; }

@@ -31,6 +31,8 @@ pktreplay gui -no-open   # just print the URL
 The GUI is a web interface embedded in the binary (no extra files, works offline, same Windows/Linux builds).
 It has an **Analyze** tab (streaming statistics with progress, protocol mix, top talkers, ports) and a **Replay**
 tab (explicit TCP/UDP selection, rewrites, pacing, TCP stream offsets, backend options, live counters and log).
+After an analysis, the Replay tab lists the capture's conversations as a pick-list (filtered to what the chosen
+mode can replay): tick the ones to modify and edit their addresses, ports or payload; the rest replay unchanged.
 Replay stays disabled until a capture and a transmission mode are chosen. Start it elevated
 (Administrator / root) for raw injection; the header badge shows whether it is.
 
