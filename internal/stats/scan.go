@@ -6,6 +6,7 @@ import (
 	"os"
 	"sync/atomic"
 
+	"github.com/sasha/pktreplay/internal/conv"
 	"github.com/sasha/pktreplay/internal/decode"
 	"github.com/sasha/pktreplay/internal/filter"
 	"github.com/sasha/pktreplay/internal/pcapio"
@@ -54,6 +55,48 @@ type Summary struct {
 	Talkers     []TalkerRow  `json:"talkers"`
 	TCPPorts    []PortRow    `json:"tcpPorts"`
 	UDPPorts    []PortRow    `json:"udpPorts"`
+
+	Conversations          []ConvRow `json:"conversations,omitempty"`
+	ConversationsTotal     int       `json:"conversationsTotal"`
+	ConversationsUntracked uint64    `json:"conversationsUntracked"` // packets beyond the table cap
+}
+
+// MaxConvRows limits the conversations returned in a Summary (sorted by bytes).
+const MaxConvRows = 1000
+
+// ConvRow is the JSON form of one conversation.
+type ConvRow struct {
+	ID          int     `json:"id"`
+	Selector    string  `json:"selector"`
+	Proto       string  `json:"proto"`
+	ClientIP    string  `json:"clientIp"`
+	ClientPort  uint16  `json:"clientPort"`
+	ServerIP    string  `json:"serverIp"`
+	ServerPort  uint16  `json:"serverPort"`
+	Packets     uint64  `json:"packets"`
+	Bytes       uint64  `json:"bytes"`
+	C2SPackets  uint64  `json:"c2sPackets"`
+	S2CPackets  uint64  `json:"s2cPackets"`
+	C2SBytes    uint64  `json:"c2sBytes"`
+	S2CBytes    uint64  `json:"s2cBytes"`
+	FirstTs     int64   `json:"firstTs"`
+	DurationSec float64 `json:"durationSec"`
+	State       string  `json:"state"`
+}
+
+// ConvRows returns up to n conversations in the requested order.
+func (s *Stats) ConvRows(n int, by string) []ConvRow {
+	if s.Convs == nil {
+		return nil
+	}
+	var out []ConvRow
+	for _, c := range s.Convs.Top(n, by) {
+		out = append(out, ConvRow{ID: c.Index, Selector: c.Selector(), Proto: conv.ProtoName(c.Proto),
+			ClientIP: c.Client.Addr().String(), ClientPort: c.Client.Port(), ServerIP: c.Server.Addr().String(), ServerPort: c.Server.Port(),
+			Packets: c.Packets, Bytes: c.Bytes, C2SPackets: c.C2SPackets, S2CPackets: c.S2CPackets, C2SBytes: c.C2SBytes, S2CBytes: c.S2CBytes,
+			FirstTs: c.FirstTs, DurationSec: float64(c.LastTs-c.FirstTs) / 1e9, State: c.State()})
+	}
+	return out
 }
 
 // Summary converts the accumulated statistics into a JSON-friendly value.
@@ -78,6 +121,11 @@ func (s *Stats) Summary(top int) Summary {
 	for _, p := range s.TopPorts(decode.ProtoUDP, top) {
 		out.UDPPorts = append(out.UDPPorts, PortRow{p.Port, p.Packets})
 	}
+	if s.Convs != nil {
+		out.Conversations = s.ConvRows(MaxConvRows, conv.ByBytes)
+		out.ConversationsTotal = s.Convs.Len()
+		out.ConversationsUntracked = s.Convs.Untracked
+	}
 	return out
 }
 
@@ -87,6 +135,12 @@ func (s *Stats) Summary(top int) Summary {
 // statistics together with ctx.Err().
 func Scan(ctx context.Context, path string, flt *filter.Filter, position func(*pcapio.Reader) error,
 	count uint64, prog *Progress) (*Stats, *pcapio.Reader, error) {
+	return ScanWith(ctx, path, flt, position, count, prog, false)
+}
+
+// ScanWith is Scan with optional conversation tracking.
+func ScanWith(ctx context.Context, path string, flt *filter.Filter, position func(*pcapio.Reader) error,
+	count uint64, prog *Progress, conversations bool) (*Stats, *pcapio.Reader, error) {
 	rd, err := pcapio.Open(path)
 	if err != nil {
 		return nil, nil, err
@@ -103,6 +157,9 @@ func Scan(ctx context.Context, path string, flt *filter.Filter, position func(*p
 		}
 	}
 	st := New()
+	if conversations {
+		st.TrackConversations(0)
+	}
 	var in decode.Info
 	var seen uint64
 	for count == 0 || seen < count {

@@ -10,6 +10,7 @@ const usage = `pktreplay - streaming PCAP/PCAPNG analysis and replay
 
 Usage:
   pktreplay stats  [flags] <capture>     one-pass summary statistics
+  pktreplay conversations [flags] <capture>  list bidirectional conversations
   pktreplay index  [flags] <capture>     build a seek index for large files
   pktreplay replay [flags] <capture>     replay filtered packets (see 'replay -h')
   pktreplay gui    [-no-open]            local web GUI (loopback only, token protected)
@@ -26,6 +27,8 @@ func main() {
 	switch os.Args[1] {
 	case "stats":
 		err = cmdStats(os.Args[2:])
+	case "conversations", "convs":
+		err = cmdConversations(os.Args[2:])
 	case "gui":
 		err = cmdGUI(os.Args[2:])
 	case "replay":

@@ -7,6 +7,7 @@ import (
 	"sort"
 	"time"
 
+	"github.com/sasha/pktreplay/internal/conv"
 	"github.com/sasha/pktreplay/internal/decode"
 )
 
@@ -29,7 +30,14 @@ type Stats struct {
 	tcpPorts [65536]uint32 // packets per destination port
 	udpPorts [65536]uint32
 	talkers  *SpaceSaving[netip.Addr]
+
+	// Convs, when non-nil, tracks conversations (costs one map lookup per IP
+	// packet, so it is opt-in via TrackConversations).
+	Convs *conv.Table
 }
+
+// TrackConversations enables the bounded conversation table.
+func (s *Stats) TrackConversations(max int) { s.Convs = conv.NewTable(max) }
 
 // New returns an empty accumulator.
 func New() *Stats {
@@ -62,6 +70,9 @@ func (s *Stats) Add(in *decode.Info, ok bool, capLen, origLen int, tsNanos int64
 	case !in.HasIP:
 		s.NonIP++
 		return
+	}
+	if s.Convs != nil {
+		s.Convs.Add(in, origLen, tsNanos)
 	}
 	if in.IPv6 {
 		s.IPv6++
