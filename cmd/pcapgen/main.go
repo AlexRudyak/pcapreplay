@@ -20,7 +20,17 @@ func main() {
 	ng := flag.Bool("ng", false, "write PCAPNG instead of classic PCAP")
 	payload := flag.Int("payload", 64, "payload bytes per packet")
 	hosts := flag.Int("hosts", 5000, "distinct client hosts")
+	stream := flag.Int("stream", 0, "instead write ONE TCP conversation with this many client data segments")
+	nosyn := flag.Bool("nosyn", false, "with -stream: omit the handshake (capture starts mid-stream)")
 	flag.Parse()
+
+	if *stream > 0 {
+		if err := genStream(*out, *stream, !*nosyn); err != nil {
+			fmt.Fprintln(os.Stderr, err)
+			os.Exit(1)
+		}
+		return
+	}
 
 	f, err := os.Create(*out)
 	if err != nil {

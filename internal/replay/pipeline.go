@@ -198,6 +198,16 @@ func RunUDP(ctx context.Context, cfg Config) (*Result, error) {
 	if err != nil {
 		return nil, err
 	}
+	if !cfg.Opts.Target.IsValid() {
+		cfg.Opts.Target = cfg.Rewrite.DstIP
+		if !cfg.Opts.Target.IsValid() {
+			k, err := ProbeUDP(&cfg)
+			if err != nil {
+				return nil, err
+			}
+			cfg.Opts.Target = k.Server
+		}
+	}
 	if err := cfg.Backend.Open(cfg.Opts); err != nil {
 		return nil, err
 	}

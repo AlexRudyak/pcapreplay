@@ -77,7 +77,13 @@ type TCPStats struct {
 
 // ProbeFlow scans the capture for the first TCP packet accepted by the filter
 // and returns its tuple; that packet's sender is treated as the client.
-func ProbeFlow(cfg *Config) (FlowKey, error) {
+func ProbeFlow(cfg *Config) (FlowKey, error) { return probe(cfg, decode.ProtoTCP) }
+
+// ProbeUDP returns the tuple of the first UDP datagram accepted by the filter,
+// used to learn the destination before the backend is opened.
+func ProbeUDP(cfg *Config) (FlowKey, error) { return probe(cfg, decode.ProtoUDP) }
+
+func probe(cfg *Config, proto uint8) (FlowKey, error) {
 	cfg.defaults()
 	rd, err := pcapio.Open(cfg.Capture)
 	if err != nil {
@@ -93,9 +99,10 @@ func ProbeFlow(cfg *Config) (FlowKey, error) {
 	for {
 		p, err := rd.Next()
 		if err != nil {
-			return FlowKey{}, errors.New("no TCP packet in the capture matches the filter")
+			return FlowKey{}, fmt.Errorf("no %s packet in the capture matches the filter",
+				map[uint8]string{decode.ProtoTCP: "TCP", decode.ProtoUDP: "UDP"}[proto])
 		}
-		if decode.Decode(p.LinkType, p.Data, &in) && in.HasIP && in.Proto == decode.ProtoTCP && in.HasPorts &&
+		if decode.Decode(p.LinkType, p.Data, &in) && in.HasIP && in.Proto == proto && in.HasPorts &&
 			cfg.Filter.Match(p.Data, &in) {
 			return FlowKey{in.Src, in.Dst, in.SrcPort, in.DstPort}, nil
 		}

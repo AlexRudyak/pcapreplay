@@ -25,6 +25,8 @@ func main() {
 	switch os.Args[1] {
 	case "stats":
 		err = cmdStats(os.Args[2:])
+	case "replay":
+		err = cmdReplay(os.Args[2:])
 	case "index":
 		err = cmdIndex(os.Args[2:])
 	case "-h", "--help", "help":
