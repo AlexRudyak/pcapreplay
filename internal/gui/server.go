@@ -146,6 +146,7 @@ func (s *Server) guard(next http.Handler) http.Handler {
 		// First visit: exchange the URL token for a cookie, then drop it from the address bar.
 		if t := r.URL.Query().Get("t"); t != "" && r.Method == http.MethodGet {
 			if s.validToken(t) {
+				w.Header().Set("X-Pktreplay", "gui") // lets a second launch recognise this instance
 				http.SetCookie(w, &http.Cookie{Name: cookieName, Value: t, Path: "/", HttpOnly: true,
 					SameSite: http.SameSiteStrictMode})
 				http.Redirect(w, r, r.URL.Path, http.StatusSeeOther)

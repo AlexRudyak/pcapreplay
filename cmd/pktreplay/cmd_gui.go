@@ -23,6 +23,19 @@ func cmdGUI(args []string) error {
 	noHistory := fs.Bool("no-history", false, "do not record or show a history of sent packets")
 	fs.Parse(args)
 
+	// Default launch only: if a GUI is already running for this user, show it again instead of
+	// starting a second process (this is what happens when the browser tab was closed).
+	shared := *addr == "127.0.0.1:0" && *dataDir == "" && !*noHistory
+	if shared {
+		if u, ok := runningInstance(gui.IsElevated()); ok {
+			if !*noOpen && !openBrowser(u) {
+				reportError("pktreplay is already running.\nOpen this address yourself (it contains a private access token):\n\n" + u)
+			}
+			fmt.Fprintln(os.Stderr, "pktreplay GUI is already running; reopened it.")
+			return nil
+		}
+	}
+
 	var opts gui.Options
 	if !*noHistory {
 		opts.DataDir = *dataDir
@@ -47,6 +60,9 @@ func cmdGUI(args []string) error {
 	}
 	defer srv.Close()
 	url := srv.URL()
+	if shared {
+		defer registerInstance(url, gui.IsElevated())()
+	}
 	windowless := defaultCommand != "" // pktreplay-gui.exe: no console, output goes to the log file
 	if windowless {
 		// Keep the access token out of the log file.
