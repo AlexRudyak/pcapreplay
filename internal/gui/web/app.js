@@ -345,7 +345,8 @@ function editorEl(c, r) {
     }
     fs.append(row); return fs;
   };
-  g.append(set("Destination (the service)", "serverIp", "serverPort", r.s), set("Source (who started it)", "clientIp", "clientPort", r.c));
+  // Same left-to-right order as the arrow in the row: source on the left, destination on the right.
+  g.append(set("Source (who started it)", "clientIp", "clientPort", r.c), set("Destination (the service)", "serverIp", "serverPort", r.s));
   const det = el("details"); det.append(el("summary", "", "Change text inside the payload"));
   const ta = el("textarea"); ta.rows = 2; ta.spellcheck = false; ta.placeholder = "old=>new   (one per line)"; ta.value = r.replace;
   ta.oninput = () => { r.replace = ta.value; sync(); }; det.append(ta); if (r.replace) det.open = true;
