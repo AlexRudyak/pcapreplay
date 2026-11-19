@@ -105,6 +105,8 @@ flushing. Window scaling and SACK are not negotiated (the SYN carries only MSS),
 
 ## Platform backends (`internal/backend`)
 
+The Windows backend uses the [WinDivert](https://github.com/basil00/WinDivert) driver by basil00 (LGPLv3/GPLv2).
+
 ```go
 type Backend interface {
     Open(Options) error

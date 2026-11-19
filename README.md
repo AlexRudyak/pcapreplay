@@ -168,7 +168,7 @@ and it is injected as an IP datagram at the scheduled time. Many conversations c
 
 The tool plays the *client* of one captured flow against a live server. The kernel knows nothing about the injected
 connection and would reset it, so the backend first **guards** the flow (Linux: a temporary nftables/iptables rule
-dropping the kernel's RST; Windows: WinDivert diverts the flow's inbound packets so the stack never sees them).
+dropping the kernel's RST; Windows: [WinDivert](https://github.com/basil00/WinDivert) diverts the flow's inbound packets so the stack never sees them).
 
 ```mermaid
 sequenceDiagram
@@ -229,7 +229,7 @@ has its own README explaining its API, invariants and design decisions.
 | [`internal/craft`](internal/craft/README.md) | Builds Ethernet/IP/TCP/UDP frames (handshake segments, test traffic). |
 | [`internal/mutate`](internal/mutate/README.md) | Pooled packet buffers, rewrites (IP/port/payload/substitution) and checksum repair. |
 | [`internal/pace`](internal/pace/README.md) | Precision pacing: original timing, fixed delay, pps, Mbit/s, burst. |
-| [`internal/backend`](internal/backend/README.md) | `Backend` interface; Linux AF_PACKET, Windows WinDivert, null. |
+| [`internal/backend`](internal/backend/README.md) | `Backend` interface; Linux AF_PACKET, Windows [WinDivert](https://github.com/basil00/WinDivert), null. |
 | [`internal/replay`](internal/replay/README.md) | The producer/consumer pipeline, the UDP engine and the TCP session engine. |
 | [`internal/record`](internal/record/README.md) | Backend wrapper that writes transmitted traffic to PCAP/PCAPNG. |
 | [`internal/history`](internal/history/README.md) | Run history store and content-addressed pcap library. |
@@ -291,8 +291,8 @@ is `sudo`; alternatively `sudo setcap cap_net_raw,cap_net_admin+ep ./pktreplay`.
 temporary nftables table dropping the kernel's RSTs for exactly the replay 4-tuple and removes it afterwards (use
 `-no-firewall` to manage it yourself).
 
-**Windows.** Sending on the network needs an elevated prompt and the WinDivert 2.2.x files (`WinDivert.dll`,
-`WinDivert64.sys`) next to `pktreplay.exe`; the installer bundles them when they were staged at build time. Some
+**Windows.** Sending on the network needs an elevated prompt and the [WinDivert](https://github.com/basil00/WinDivert) 2.2.x files (`WinDivert.dll`,
+`WinDivert64.sys`, from the [official releases](https://github.com/basil00/WinDivert/releases)) next to `pktreplay.exe`; the installer bundles them when they were staged at build time. Some
 antivirus products flag WinDivert because the same technique is used by malware. Loopback targets are not supported
 by WinDivert network-layer injection. Analysis, conversation lists, dry runs and recording need no privileges.
 
@@ -352,8 +352,9 @@ tests, the commit convention (Conventional Commits) and what a good pull request
 
 ## License
 
-[MIT](LICENSE). The Windows installer can bundle the **WinDivert** driver, which is a separate project under
-LGPLv3/GPLv2 (dual licensed); it is *not* part of this repository and must be used unmodified under its own license.
+[MIT](LICENSE). The Windows installer can bundle the **[WinDivert](https://github.com/basil00/WinDivert)** driver by basil00, a separate
+project under LGPLv3/GPLv2 (dual licensed); it is *not* part of this repository and must be used unmodified under its own
+license. See [THIRD_PARTY.md](THIRD_PARTY.md).
 
 ## Disclaimer
 

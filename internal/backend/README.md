@@ -19,7 +19,7 @@ the target address (for route/MAC discovery), MAC overrides, the WinDivert inter
 | Backend | File | How it injects |
 |---|---|---|
 | **Linux** | `linux.go`, `linux_fw.go`, `sendmmsg_*.go` | `AF_PACKET` `SOCK_RAW`; the Ethernet header is added per batch and frames are sent with `sendmmsg(2)` (up to 256 per call; the syscall number differs per architecture: `sendmmsg_amd64.go`, `_386.go`, `_other.go`). The egress interface and source MAC come from the routing choice; the next-hop MAC from `/proc/net/arp`, the default gateway, or an ARP probe (`-dst-mac` overrides). |
-| **Windows** | `windows.go`, `windivert_filter.go` | `WinDivert.dll` loaded lazily with `syscall.LazyDLL` (no cgo). Network-layer, outbound `WinDivertSendEx`, up to 128 packets per call; receive handle with a flow filter. |
+| **Windows** | `windows.go`, `windivert_filter.go` | [WinDivert](https://github.com/basil00/WinDivert)'s `WinDivert.dll` loaded lazily with `syscall.LazyDLL` (no cgo). Network-layer, outbound `WinDivertSendEx`, up to 128 packets per call; receive handle with a flow filter. |
 | **Null** | `backend.go` | Discards packets and reports them as sent: a dry run with zero privileges, also used to benchmark the pipeline. |
 
 ## `Guard`: keeping the OS out of the way

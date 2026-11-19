@@ -21,7 +21,7 @@ with `cmd/mkicon`, stages everything under `dist/stage`, runs `ISCC.exe` and wri
 
 ## Bundling WinDivert (optional)
 
-The installer includes the WinDivert 2.2.x driver when `WinDivert.dll`, `WinDivert64.sys` and the licence are staged in
+The installer includes the [WinDivert](https://github.com/basil00/WinDivert) 2.2.x driver (official release: <https://github.com/basil00/WinDivert/releases/tag/v2.2.2>) when `WinDivert.dll`, `WinDivert64.sys` and the licence are staged in
 `installer/redist/` (git-ignored). `fetch-windivert.ps1` downloads the official release (or uses `-ZipPath`), checks
 **pinned SHA-256 hashes**, the driver's Authenticode signature and the licence text, and stages the files.
 WinDivert is LGPLv3/GPLv2 and must stay unmodified; the licence ships as `WinDivert-LICENSE.txt`. Some antivirus

@@ -302,7 +302,7 @@ TCP-only flags are rejected in `-mode udp`.
 | `-no-firewall` | off | Linux, TCP mode: do **not** install the temporary firewall rule that drops the kernel's automatic RST. The kernel does not know about the injected connection and would reset it; pktreplay normally adds an `nftables`/`iptables` rule for the duration and removes it afterwards. Use this flag only if you manage that rule yourself. On Windows the equivalent guard is part of the WinDivert filter. |
 
 Requirements: **Linux** needs root or `CAP_NET_RAW` (plus `CAP_NET_ADMIN` for the firewall rule). **Windows** needs
-an elevated (Administrator) prompt and `WinDivert.dll` + `WinDivert64.sys` next to `pktreplay.exe` (the installer
+an elevated (Administrator) prompt and `WinDivert.dll` + `WinDivert64.sys` (from [basil00/WinDivert](https://github.com/basil00/WinDivert/releases)) next to `pktreplay.exe` (the installer
 includes them when available); **loopback targets (127.0.0.1) are not supported on Windows**. On Linux, loopback
 works. `-backend null` needs nothing.
 

@@ -32,7 +32,8 @@ SENDING PACKETS ONTO THE NETWORK (raw injection)
   WinDivert-LICENSE.txt), just start "pktreplay (Administrator)". Some antivirus products flag
   WinDivert because the same technique is abused by malware; allow it only if you trust this
   installer. If the files are missing, pktreplay says so and you can add them as follows.
-    1. Download the official WinDivert 2.2.x release from https://reqrypt.org/windivert.html
+    1. Download the official WinDivert 2.2.x release from https://github.com/basil00/WinDivert/releases (the official
+       repository; project site: https://reqrypt.org/windivert.html)
        and verify it.
     2. Copy WinDivert.dll and WinDivert64.sys (x64) into the pktreplay install folder
        (the folder that contains pktreplay.exe).
