@@ -187,6 +187,7 @@ sudo pktreplay replay -mode tcp -dst-ip 10.20.0.5 -record sent.pcapng capture.pc
 pktreplay replay -mode udp -backend null -burst -dst-ip 10.9.9.9 huge.pcap
 ```
 `-mode` is mandatory: replay never guesses between TCP and UDP. Run `pktreplay replay -h` for every flag.
+Every command and flag is explained in **[README-CLI.md](README-CLI.md)**.
 
 Filter grammar: `src_ip|dst_ip|ip == addr[/cidr]`, `src_port|dst_port|port == N` or `in lo-hi`,
 `proto == tcp|udp|icmp|icmp6|arp|ip|ipv6|N`, `tcp_flags == syn+ack`, `payload contains "text"|0xHEX`,
