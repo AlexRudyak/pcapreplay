@@ -46,10 +46,10 @@ func TestOriginalTimingAccuracy(t *testing.T) {
 
 func TestSpeedAndMaxGap(t *testing.T) {
 	p, _ := New(Config{Mode: Original, Speed: 2, MaxGap: 10 * time.Millisecond})
-	start := time.Now()
+	start := nanotime() // the pacer's own clock: time.Since is tick-quantised on Windows
 	p.Wait(0, 1)
 	p.Wait(int64(40*time.Millisecond), 1) // 40ms gap capped to 10ms then halved = 5ms
-	if el := time.Since(start); el > 20*time.Millisecond || el < 4*time.Millisecond {
+	if el := time.Duration(nanotime() - start); el > 20*time.Millisecond || el < 4*time.Millisecond {
 		t.Fatalf("elapsed %v", el)
 	}
 }

@@ -135,6 +135,26 @@ func TestAuthAndHostChecks(t *testing.T) {
 	}
 }
 
+func TestInfoListsSamplesAndElevateIsGuarded(t *testing.T) {
+	c := newTC(t)
+	_, b := c.do("GET", "/api/info", nil, nil)
+	var info struct {
+		Samples []sampleFile `json:"samples"`
+	}
+	if err := json.Unmarshal(b, &info); err != nil || info.Samples == nil {
+		t.Fatalf("info must carry a samples list: %s", b)
+	}
+	// The restart-as-administrator endpoint triggers a UAC prompt on Windows, so it is
+	// only probed through the guards that reject a request before it can act.
+	if r, _ := c.do("GET", "/api/elevate", nil, nil); r.StatusCode != 405 {
+		t.Fatalf("elevate must require POST: %d", r.StatusCode)
+	}
+	c.cookie = nil
+	if r, _ := c.do("POST", "/api/elevate", struct{}{}, nil); r.StatusCode != 401 {
+		t.Fatalf("elevate must require the access token: %d", r.StatusCode)
+	}
+}
+
 func TestCSRFProtections(t *testing.T) {
 	c := newTC(t)
 	if r, _ := c.do("POST", "/api/cancel", struct{}{}, func(q *http.Request) { q.Header.Set("Origin", "http://evil.example") }); r.StatusCode != 403 {

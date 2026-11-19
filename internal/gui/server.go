@@ -100,6 +100,7 @@ func (s *Server) Handler() http.Handler {
 	mux.HandleFunc("/api/replay", s.startReplay)
 	mux.HandleFunc("/api/cancel", s.cancel)
 	mux.HandleFunc("/api/status", s.status)
+	mux.HandleFunc("/api/elevate", s.elevate)
 	return s.guard(mux)
 }
 
@@ -111,7 +112,7 @@ func (s *Server) guard(next http.Handler) http.Handler {
 		}
 		w.Header().Set("Cache-Control", "no-store")
 		w.Header().Set("X-Content-Type-Options", "nosniff")
-		w.Header().Set("Content-Security-Policy", "default-src 'self'; style-src 'self' 'unsafe-inline'; frame-ancestors 'none'")
+		w.Header().Set("Content-Security-Policy", "default-src 'self'; img-src 'self' data:; style-src 'self' 'unsafe-inline'; frame-ancestors 'none'")
 		// First visit: exchange the URL token for a cookie, then drop it from the address bar.
 		if t := r.URL.Query().Get("t"); t != "" && r.Method == http.MethodGet {
 			if s.validToken(t) {
@@ -178,8 +179,70 @@ func (s *Server) info(w http.ResponseWriter, r *http.Request) {
 	cwd, _ := os.Getwd()
 	writeJSON(w, 200, map[string]any{
 		"version": s.Version, "os": runtime.GOOS, "arch": runtime.GOARCH, "elevated": isElevated(),
-		"home": home, "cwd": cwd, "roots": roots(),
+		"home": home, "cwd": cwd, "roots": roots(), "samples": sampleCaptures(),
 	})
+}
+
+type sampleFile struct {
+	Name string `json:"name"`
+	Path string `json:"path"`
+	Size int64  `json:"size"`
+}
+
+// sampleCaptures lists the example captures shipped next to the executable (or
+// in ./samples when running from a source checkout).
+func sampleCaptures() []sampleFile {
+	var dirs []string
+	if exe, err := os.Executable(); err == nil {
+		dirs = append(dirs, filepath.Join(filepath.Dir(exe), "samples"))
+	}
+	if cwd, err := os.Getwd(); err == nil {
+		dirs = append(dirs, filepath.Join(cwd, "samples"))
+	}
+	seen := map[string]bool{}
+	out := []sampleFile{}
+	for _, d := range dirs {
+		ents, err := os.ReadDir(d)
+		if err != nil {
+			continue
+		}
+		for _, e := range ents {
+			p := filepath.Join(d, e.Name())
+			if e.IsDir() || !isCapture(e.Name()) || seen[p] {
+				continue
+			}
+			seen[p] = true
+			var sz int64
+			if fi, err := e.Info(); err == nil {
+				sz = fi.Size()
+			}
+			out = append(out, sampleFile{Name: e.Name(), Path: p, Size: sz})
+		}
+	}
+	return out
+}
+
+// elevate restarts the program with administrator rights (UAC prompt) and then
+// exits this instance, whose browser tab is replaced by the new one.
+func (s *Server) elevate(w http.ResponseWriter, r *http.Request) {
+	var req struct{}
+	if !decodeBody(w, r, &req) {
+		return
+	}
+	if isElevated() {
+		fail(w, http.StatusBadRequest, errors.New("already running with administrator rights"))
+		return
+	}
+	if st := s.jobs.Status(); st.State == stateRunning {
+		fail(w, http.StatusConflict, errBusy)
+		return
+	}
+	if err := relaunchElevated(); err != nil {
+		fail(w, http.StatusBadRequest, err)
+		return
+	}
+	writeJSON(w, 200, map[string]bool{"restarting": true})
+	go func() { time.Sleep(800 * time.Millisecond); os.Exit(0) }()
 }
 
 func roots() []string {

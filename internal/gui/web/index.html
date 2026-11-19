@@ -5,218 +5,237 @@
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>pktreplay</title>
 <link rel="stylesheet" href="style.css">
-<link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 16 16'%3E%3Cpath d='M2 8h3l2-5 3 10 2-5h2' fill='none' stroke='%232f6fed' stroke-width='1.6' stroke-linecap='round' stroke-linejoin='round'/%3E%3C/svg%3E">
+<link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 16 16'%3E%3Crect width='16' height='16' rx='3.6' fill='%232f6fed'/%3E%3Cpath d='M2 8h3l2-5 3 10 2-5h2' fill='none' stroke='white' stroke-width='1.7' stroke-linecap='round' stroke-linejoin='round'/%3E%3C/svg%3E">
 </head>
 <body>
-<header>
-  <div class="brand"><svg viewBox="0 0 16 16" width="20" height="20" aria-hidden="true"><path d="M2 8h3l2-5 3 10 2-5h2" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"/></svg> pktreplay</div>
-  <span class="muted" id="ver"></span>
+<header class="top">
+  <div class="brand">
+    <svg viewBox="0 0 16 16" width="26" height="26" aria-hidden="true"><rect width="16" height="16" rx="3.6" fill="currentColor"/><path d="M2 8h3l2-5 3 10 2-5h2" fill="none" stroke="#fff" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"/></svg>
+    <span>pktreplay</span>
+  </div>
   <span class="spacer"></span>
   <span class="badge" id="elev"></span>
 </header>
 
-<nav class="steps" aria-label="Workflow">
-  <ol>
-    <li><a href="#s1" data-step="s1"><span class="n">1</span><span class="t">Capture</span><span class="st" id="st-s1"></span></a></li>
-    <li><a href="#s2" data-step="s2"><span class="n">2</span><span class="t">Choose what to replay</span><span class="st" id="st-s2"></span></a></li>
-    <li><a href="#s3" data-step="s3"><span class="n">3</span><span class="t">Settings</span><span class="st" id="st-s3"></span></a></li>
-    <li><a href="#s4" data-step="s4"><span class="n">4</span><span class="t">Send</span><span class="st" id="st-s4"></span></a></li>
-  </ol>
-</nav>
+<div id="toast" class="toast" role="alert" hidden></div>
 
 <main>
-<div class="layout">
-<div class="flow">
 
-  <!-- 1 CAPTURE -->
-  <section class="card step" id="s1">
-    <div class="step-head"><span class="n">1</span><div><h2>Open a capture</h2>
-      <p class="sub">Pick a .pcap / .pcapng file. It is analysed in one streaming pass, so file size does not matter.</p></div></div>
-    <div class="row">
-      <input id="path" class="grow" type="text" placeholder="Path to a .pcap / .pcapng file" spellcheck="false" autocomplete="off">
-      <button id="browse" type="button">Browse…</button>
-      <button id="runStats" class="primary" type="button">Analyze</button>
-      <button id="stopStats" type="button" hidden>Stop</button>
+<!-- ============ WELCOME ============ -->
+<section id="welcome" class="center">
+  <div class="hero">
+    <h1>Replay recorded network traffic</h1>
+    <p class="lead">Open a capture, pick the conversations you want, point them at your test target and send.</p>
+
+    <button id="openBtn" class="primary big" type="button">Open a capture file…</button>
+    <div class="or"><span>or paste a path</span></div>
+    <form class="row" id="pathForm">
+      <input id="path" class="grow" type="text" placeholder="C:\captures\trace.pcap" spellcheck="false" autocomplete="off" aria-label="Path to a capture file">
+      <button type="submit">Analyze</button>
+    </form>
+    <div id="welcomeError" class="alert" hidden></div>
+
+    <div class="lists">
+      <div id="samplesBox" hidden><h3>Try an example</h3><ul class="filelist" id="sampleList"></ul></div>
+      <div id="recentBox" hidden><h3>Recent</h3><ul class="filelist" id="recentList"></ul></div>
     </div>
-    <details id="rangeBox"><summary>Filter and packet range <span class="muted" id="rangeSummary">(everything)</span></summary>
-      <div class="grid3">
-        <label class="grow2">Filter
-          <input id="filter" type="text" placeholder='e.g. src_ip == 192.168.1.0/24 AND dst_port == 8080' spellcheck="false" autocomplete="off">
-          <small id="filterMsg" class="hint">Header terms run before payload terms. Use <code>payload contains "x"</code> or <code>payload ~ "regex"</code>.</small>
-        </label>
-        <label>Start at packet <input id="start" type="number" min="0" value="0"></label>
-        <label>Max packets <input id="count" type="number" min="0" value="0"><small class="hint">0 = all</small></label>
-      </div>
-    </details>
-    <div class="progress" id="statsProgress" hidden><div class="bar"><i id="statsBar"></i></div><span id="statsProgText" class="muted"></span></div>
-    <div id="statsError" class="alert" hidden></div>
-    <div id="overview" hidden>
-      <div class="chips" id="chips"></div>
-      <details><summary>Capture overview: protocols, top talkers, ports</summary>
-        <div class="kpis" id="kpis"></div>
-        <div class="grid2">
-          <div class="card"><h3>Protocols</h3><div id="protoBars"></div></div>
-          <div class="card"><h3>Top talkers <small class="muted">(bytes, bounded sketch)</small></h3><div id="talkers"></div></div>
-          <div class="card"><h3>TCP destination ports</h3><div id="tcpPorts"></div></div>
-          <div class="card"><h3>UDP destination ports</h3><div id="udpPorts"></div></div>
-        </div>
-      </details>
-    </div>
-  </section>
-
-  <!-- 2 CHOOSE -->
-  <section class="card step" id="s2">
-    <div class="step-head"><span class="n">2</span><div><h2>Choose what to replay</h2>
-      <p class="sub">First pick how to transmit, then tick the conversations to send. Tick none to send everything.</p></div></div>
-
-    <div class="seg" id="modeSeg" role="radiogroup" aria-label="Transmission mode">
-      <button type="button" role="radio" aria-checked="false" data-mode="tcp"><b>TCP</b><small>Real 3-way handshake, then replays <u>one</u> conversation's client side</small></button>
-      <button type="button" role="radio" aria-checked="false" data-mode="udp"><b>UDP</b><small>Stateless: sends the datagrams of any number of conversations</small></button>
-    </div>
-    <p class="hint" id="modeHint">Choose TCP or UDP. The mode is never guessed.</p>
-
-    <div id="noAnalysis" class="empty-state">
-      <p>No conversation list yet.</p>
-      <button id="pickAnalyze" class="small" type="button">Analyze the capture</button>
-      <small class="hint">You can also skip this and send the whole capture from step 4.</small>
-    </div>
-
-    <div id="convBox" hidden>
-      <div class="row">
-        <b class="grow" id="convCount"></b>
-        <input id="convSearch" type="search" placeholder="Filter: 10.0.0.2, :443, closed…" spellcheck="false">
-        <button id="selAll" class="small" type="button">Tick all shown</button>
-        <button id="pickClear" class="small" type="button">Untick all</button>
-      </div>
-      <div id="pickStale" class="hint warnbox" hidden></div>
-      <div class="tablewrap">
-        <table id="convTable">
-          <thead><tr><th class="chk"></th><th>Proto</th><th>Client</th><th>Server</th><th class="num">Packets <small>(→ / ←)</small></th><th class="num">Bytes</th><th class="num">Duration</th><th>State</th></tr></thead>
-          <tbody></tbody>
-        </table>
-      </div>
-      <small id="convNote" class="hint"></small>
-    </div>
-
-    <div id="selection">
-      <h3 id="selTitle">Selected conversations</h3>
-      <p class="hint" id="convEmpty">None ticked: every conversation of the chosen mode in the capture will be sent exactly as recorded.</p>
-      <div id="ruleList"></div>
-      <label class="check" id="alsoRow" hidden><input id="alsoOthers" type="checkbox"> <span id="alsoText">Also send the other conversations, unchanged</span></label>
-    </div>
-    <details><summary class="muted">Advanced: add a conversation by selector (for conversations not in the list)</summary>
-      <div class="row">
-        <input id="selectorIn" class="grow mono" type="text" placeholder="tcp/192.168.1.50:51234/192.168.1.10:80" spellcheck="false" autocomplete="off">
-        <button id="addSelector" type="button">Add</button>
-      </div>
-      <small id="selectorErr" class="hint"></small>
-    </details>
-  </section>
-
-  <!-- 3 SETTINGS -->
-  <section class="card step" id="s3">
-    <div class="step-head"><span class="n">3</span><div><h2>Settings</h2>
-      <p class="sub">Sensible defaults are preselected; open a section only if you need to change it.</p></div></div>
-
-    <details class="setting" open>
-      <summary><b>Timing</b> <span class="muted" id="pacingSum"></span></summary>
-      <div class="grid4">
-        <label>Pacing
-          <select id="paceMode">
-            <option value="original">Original capture timing</option>
-            <option value="fixed">Fixed delay</option>
-            <option value="pps">Packets per second cap</option>
-            <option value="mbps">Throughput cap (Mbit/s)</option>
-            <option value="burst">Line rate (no pacing)</option>
-          </select></label>
-        <label data-pace="original">Speed ×<input id="speed" type="number" min="0" step="0.1" value="1"></label>
-        <label data-pace="original">Max idle gap<input id="maxGap" type="text" placeholder="e.g. 500ms"></label>
-        <label data-pace="fixed">Delay<input id="delay" type="text" placeholder="e.g. 250us, 5ms"></label>
-        <label data-pace="pps">Packets/s<input id="pps" type="number" min="1" value="10000"></label>
-        <label data-pace="mbps">Mbit/s<input id="mbps" type="number" min="0.1" step="0.1" value="100"></label>
-        <label>Passes <input id="loop" type="number" min="1" value="1"></label>
-      </div>
-    </details>
-
-    <details class="setting" id="tcpCard" hidden>
-      <summary><b>TCP stream</b> <span class="muted" id="tcpSum"></span></summary>
-      <div class="grid4">
-        <label>Skip first N bytes<input id="skipBytes" type="number" min="0" value="0"><small class="hint">start mid-stream</small></label>
-        <label>Sequence offset<input id="seqOffset" type="number" value="0"><small class="hint">signed shift, bytes</small></label>
-        <label>ACK mode
-          <select id="ackMode"><option value="live">Live (ack what was received)</option><option value="capture">Capture-rebased</option></select></label>
-        <label>Handshake timeout<input id="handshakeTimeout" type="text" value="5s"></label>
-      </div>
-      <small class="hint">Captured SYN / SYN-ACK / RST packets are never re-injected; a mid-stream capture is anchored at its first data packet.</small>
-    </details>
-
-    <details class="setting">
-      <summary><b>Record what is sent</b> <span class="muted" id="recSum">(off)</span></summary>
-      <label>Save to file
-        <input id="record" type="text" placeholder="e.g. D:\captures\sent.pcapng (leave empty to not record)" spellcheck="false" autocomplete="off">
-        <small class="hint">.pcapng keeps packet direction; any other extension writes classic pcap. Readable by tshark/Wireshark and by this tool.</small></label>
-      <label class="check"><input id="recordRx" type="checkbox" checked> Also record replies from the target (TCP mode)</label>
-    </details>
-
-    <details class="setting">
-      <summary><b>Where to send</b> <span class="muted" id="backendSum"></span></summary>
-      <div class="grid4">
-        <label>Backend
-          <select id="backend"><option value="auto">Raw injection (this OS)</option><option value="null">Dry run (null, nothing sent)</option></select></label>
-      </div>
-      <details><summary class="muted">Advanced network options</summary>
-        <div class="grid4">
-          <label>Interface<input id="iface" type="text" placeholder="auto" spellcheck="false"></label>
-          <label>Source MAC<input id="srcMac" type="text" placeholder="auto" spellcheck="false"></label>
-          <label>Next-hop MAC<input id="dstMac" type="text" placeholder="auto (ARP)" spellcheck="false"></label>
-          <label>WinDivert IfIdx<input id="ifIndex" type="number" min="0" value="0"></label>
-        </div>
-        <label class="check"><input id="noFirewall" type="checkbox"> Don't install the Linux RST-drop firewall rule (I manage it)</label>
-      </details>
-    </details>
-
-    <details class="setting" id="globalRewrite">
-      <summary><b>Rewrite every packet</b> <span class="req">advanced</span></summary>
-      <p class="hint warnbox">Applies to <b>every packet</b> of every conversation that is not ticked above, including the server's replies:
-        a destination IP set here is written into replies too. Prefer editing individual conversations in step 2.</p>
-      <div class="grid4">
-        <label>Source IP<input id="srcIp" type="text" placeholder="captured" spellcheck="false"></label>
-        <label>Source port<input id="srcPort" type="number" min="0" max="65535" placeholder="captured"></label>
-        <label>Destination IP<input id="dstIp" type="text" placeholder="captured" spellcheck="false"></label>
-        <label>Destination port<input id="dstPort" type="number" min="0" max="65535" placeholder="captured"></label>
-      </div>
-      <label>Replace entire payload <input id="payload" type="text" placeholder='text, hex:de ad be ef, or 0xdeadbeef' spellcheck="false"></label>
-      <label>Substitutions <small class="muted">one per line: <code>old=&gt;new</code></small>
-        <textarea id="replace" rows="2" spellcheck="false" placeholder="tenant-a=>tenant-b"></textarea></label>
-    </details>
-  </section>
-</div>
-
-<!-- 4 SEND -->
-<aside class="run" id="s4">
-  <div class="card live">
-    <div class="step-head tight"><span class="n">4</span><div><h2>Send</h2></div><span class="pill" id="pill">idle</span></div>
-    <p class="summary" id="sendSummary">Open a capture to begin.</p>
-    <div id="replayError" class="alert" hidden></div>
-    <div class="row">
-      <button id="runReplay" class="primary grow" type="button" disabled>Start replay</button>
-      <button id="stopReplay" class="danger" type="button" hidden>Stop</button>
-    </div>
-    <small class="hint" id="startHint"></small>
-    <div class="live-grid" id="liveGrid"></div>
-    <div id="tcpInfo" class="tcpinfo" hidden></div>
-    <div id="recInfo" class="tcpinfo" hidden></div>
-    <pre id="log" class="log" aria-live="polite" hidden></pre>
+    <p class="fine">Capture files stay on this computer. pktreplay only listens on this machine.</p>
   </div>
-</aside>
-</div>
+</section>
+
+<!-- ============ ANALYZING ============ -->
+<section id="analyzing" class="center" hidden>
+  <div class="hero narrow">
+    <h2 id="anName">Reading the capture…</h2>
+    <div class="bar big"><i id="anBar"></i></div>
+    <p class="muted" id="anText"></p>
+    <button id="anCancel" type="button">Cancel</button>
+  </div>
+</section>
+
+<!-- ============ WORKBENCH ============ -->
+<section id="work" hidden>
+  <div class="filebar">
+    <div class="fileinfo">
+      <div class="fname" id="fName"></div>
+      <div class="fmeta" id="fMeta"></div>
+    </div>
+    <div class="row">
+      <button id="detailsBtn" type="button" class="quiet">Capture details</button>
+      <button id="limitBtn" type="button" class="quiet">Limit…</button>
+      <button id="changeBtn" type="button">Open another…</button>
+    </div>
+  </div>
+
+  <div class="cols">
+    <!-- LEFT: conversations -->
+    <div class="panel listpanel">
+      <div class="panel-head">
+        <h2>1. Choose conversations</h2>
+        <p class="sub">Each row is one exchange between two addresses. Tick the ones to send.</p>
+      </div>
+      <div class="toolbar">
+        <label class="selall"><input type="checkbox" id="selAll" aria-label="Select all shown"> <span id="selAllText">Select all</span></label>
+        <div class="pills" id="protoPills" role="group" aria-label="Filter by protocol"></div>
+        <input id="search" type="search" placeholder="Search address, port or service" spellcheck="false" aria-label="Search conversations">
+      </div>
+      <div id="list" class="list"></div>
+      <p id="listNote" class="hint"></p>
+    </div>
+
+    <!-- RIGHT: send -->
+    <aside class="panel sendpanel" id="sendPanel">
+      <div id="cfgView">
+        <div class="panel-head"><h2>2. Send</h2></div>
+        <div class="sendbody">
+
+        <div class="block">
+          <div class="label">Selected</div>
+          <div id="selSummary" class="selsummary"></div>
+          <button id="keepFirst" class="link" type="button" hidden></button>
+        </div>
+
+        <div class="block">
+          <div class="label">How to send <span class="req" id="modeReq">choose one</span></div>
+          <div class="seg" id="modeSeg" role="radiogroup" aria-label="Transmission mode">
+            <button type="button" role="radio" aria-checked="false" data-mode="tcp"><b>TCP</b><small>Opens a real connection</small><i class="sug" hidden>matches your selection</i></button>
+            <button type="button" role="radio" aria-checked="false" data-mode="udp"><b>UDP</b><small>Sends the datagrams</small><i class="sug" hidden>matches your selection</i></button>
+          </div>
+          <p class="hint" id="modeHint"></p>
+        </div>
+
+        <div class="block">
+          <div class="label">Where to</div>
+          <div class="choice" id="whereChoice">
+            <label class="opt"><input type="radio" name="where" value="auto"> <span><b>Send on the network</b><small>Needs administrator</small></span></label>
+            <label class="opt"><input type="radio" name="where" value="null"> <span><b>Test run</b><small>Nothing is sent out</small></span></label>
+          </div>
+          <div id="adminNote" class="note" hidden>
+            <span>Sending on the network needs administrator rights.</span>
+            <button id="elevateBtn" type="button" class="small">Restart as administrator</button>
+          </div>
+          <div class="target" id="targetBox">
+            <label>Send to this address <span class="muted">(optional)</span>
+              <div class="row"><input id="tIp" class="grow" type="text" placeholder="keep the recorded one" spellcheck="false" aria-label="Destination IP"><input id="tPort" class="port" type="number" min="0" max="65535" placeholder="port" aria-label="Destination port"></div>
+            </label>
+            <small class="hint" id="targetHint">Changes the destination of every selected conversation. The replies keep matching.</small>
+          </div>
+        </div>
+
+        <div class="block">
+          <div class="label">Speed</div>
+          <select id="speed" aria-label="Speed">
+            <option value="orig1">Like the recording</option>
+            <option value="orig2">2× faster</option>
+            <option value="orig10">10× faster</option>
+            <option value="burst">As fast as possible</option>
+            <option value="custom">Custom…</option>
+          </select>
+          <div class="grid2" id="customSpeed" hidden>
+            <select id="cType" aria-label="Custom speed type"><option value="pps">Packets per second</option><option value="mbps">Megabits per second</option><option value="fixed">Fixed delay</option></select>
+            <input id="cVal" type="text" value="1000" aria-label="Custom speed value">
+          </div>
+        </div>
+
+        <div class="block">
+          <label class="check"><input id="recOn" type="checkbox"> Save a copy of what was sent</label>
+          <input id="recPath" type="text" placeholder="where to save (.pcapng or .pcap)" spellcheck="false" hidden aria-label="Recording file">
+        </div>
+
+        </div>
+        <div class="sendfoot">
+          <p class="why" id="why"></p>
+          <button id="sendBtn" class="primary big wide" type="button" disabled>Send</button>
+          <p class="summary" id="sendSummary"></p>
+          <button id="moreBtn" class="link" type="button">More options…</button>
+        </div>
+      </div>
+
+      <!-- run / result view -->
+      <div id="runView" hidden>
+        <div class="runhead"><span class="spinner" id="spin" hidden></span><h2 id="runTitle">Sending…</h2><span class="pill" id="runPill"></span></div>
+        <p id="runText" class="runtext"></p>
+        <div id="runError" class="alert" hidden></div>
+        <div class="live-grid" id="liveGrid"></div>
+        <div id="tcpInfo" class="infobox" hidden></div>
+        <div id="recInfo" class="infobox" hidden></div>
+        <div class="row">
+          <button id="stopBtn" class="danger grow" type="button" hidden>Stop</button>
+          <button id="againBtn" class="primary grow" type="button" hidden>Back to selection</button>
+        </div>
+        <button id="elevateBtn2" class="small" type="button" hidden>Restart as administrator</button>
+        <details class="logbox"><summary>Technical log</summary><pre id="log"></pre></details>
+      </div>
+    </aside>
+  </div>
+</section>
 </main>
 
-<dialog id="dlg">
-  <form method="dialog" class="dlg-head"><b>Choose a capture</b><button value="close" class="ghost" aria-label="Close">✕</button></form>
-  <div class="row dlg-path"><button id="up" type="button">↑ Up</button><code id="curDir" class="grow"></code></div>
-  <div id="roots" class="row wrap"></div>
+<!-- ============ DIALOGS ============ -->
+<dialog id="fileDlg">
+  <form method="dialog" class="dlg-head"><b>Open a capture</b><button value="close" class="ghost" aria-label="Close">✕</button></form>
+  <div class="row quick" id="quick"></div>
+  <div class="row pathbar"><button id="up" type="button" class="small">↑ Up</button><code id="curDir" class="grow"></code></div>
   <ul id="entries" class="entries"></ul>
+</dialog>
+
+<dialog id="detailsDlg">
+  <form method="dialog" class="dlg-head"><b>Capture details</b><button value="close" class="ghost" aria-label="Close">✕</button></form>
+  <div class="kpis" id="kpis"></div>
+  <div class="grid2">
+    <div class="card"><h3>Protocols</h3><div id="protoBars"></div></div>
+    <div class="card"><h3>Busiest addresses</h3><div id="talkers"></div></div>
+    <div class="card"><h3>TCP ports</h3><div id="tcpPorts"></div></div>
+    <div class="card"><h3>UDP ports</h3><div id="udpPorts"></div></div>
+  </div>
+</dialog>
+
+<dialog id="limitDlg">
+  <form method="dialog" class="dlg-head"><b>Limit what is analysed</b><button value="close" class="ghost" aria-label="Close">✕</button></form>
+  <p class="sub">Only packets matching these limits are analysed and can be sent. Leave empty to use everything.</p>
+  <label>Filter
+    <input id="filter" type="text" placeholder='e.g. src_ip == 192.168.1.0/24 AND dst_port == 8080' spellcheck="false" autocomplete="off">
+    <small id="filterMsg" class="hint">Examples: <code>tcp_flags == syn</code>, <code>payload contains "login"</code>, <code>ip == 10.0.0.0/8</code></small>
+  </label>
+  <div class="grid2">
+    <label>Start at packet <input id="start" type="number" min="0" value="0"></label>
+    <label>Stop after (packets, 0 = all) <input id="count" type="number" min="0" value="0"></label>
+  </div>
+  <div class="row end"><button id="limitReset" type="button">Clear</button><button id="limitApply" type="button" class="primary">Apply and re-analyze</button></div>
+</dialog>
+
+<dialog id="moreDlg">
+  <form method="dialog" class="dlg-head"><b>More options</b><button value="close" class="ghost" aria-label="Close">✕</button></form>
+  <details class="setting" open><summary><b>Repeat</b></summary>
+    <label>Send the selection this many times <input id="loop" type="number" min="1" value="1"></label>
+  </details>
+  <details class="setting"><summary><b>Change the payload of every selected conversation</b></summary>
+    <label>Replace text <span class="muted">one per line: <code>old=&gt;new</code></span>
+      <textarea id="bulkReplace" rows="3" spellcheck="false" placeholder="tenant-a=>tenant-b"></textarea></label>
+    <small class="hint">You can also change the payload of a single conversation from its row.</small>
+  </details>
+  <details class="setting" id="tcpOpts"><summary><b>TCP stream</b></summary>
+    <div class="grid2">
+      <label>Skip the first N bytes<input id="skipBytes" type="number" min="0" value="0"><small class="hint">start in the middle of the stream</small></label>
+      <label>Sequence number shift<input id="seqOffset" type="number" value="0"><small class="hint">signed, in bytes</small></label>
+      <label>Acknowledgements
+        <select id="ackMode"><option value="live">Acknowledge what the server really sent</option><option value="capture">Follow the recording</option></select></label>
+      <label>Connection timeout<input id="handshakeTimeout" type="text" value="5s"></label>
+    </div>
+  </details>
+  <details class="setting"><summary><b>Recording</b></summary>
+    <label class="check"><input id="recordRx" type="checkbox" checked> Also record the replies from the target (TCP)</label>
+  </details>
+  <details class="setting"><summary><b>Network adapter</b> <span class="muted">(usually automatic)</span></summary>
+    <div class="grid2">
+      <label>Interface<input id="iface" type="text" placeholder="automatic" spellcheck="false"></label>
+      <label>Source MAC<input id="srcMac" type="text" placeholder="automatic" spellcheck="false"></label>
+      <label>Next-hop MAC<input id="dstMac" type="text" placeholder="automatic (ARP)" spellcheck="false"></label>
+      <label>Windows interface index<input id="ifIndex" type="number" min="0" value="0"></label>
+    </div>
+    <label class="check"><input id="noFirewall" type="checkbox"> Linux: I manage the firewall rule that blocks the kernel's resets myself</label>
+  </details>
+  <div class="row end"><button id="moreDone" class="primary" type="button">Done</button></div>
 </dialog>
 
 <script src="app.js"></script>

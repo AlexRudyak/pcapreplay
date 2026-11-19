@@ -29,20 +29,23 @@ pktreplay gui            # starts a local server and opens your browser
 pktreplay gui -no-open   # just print the URL
 ```
 The GUI is a web interface embedded in the binary (no extra files, works offline, same Windows/Linux builds).
-It is a single page that follows the order you work in, with a numbered stepper at the top:
+The interface has three screens and one flow:
 
-1. **Capture**: choose a file (it is analysed automatically, with progress); optional filter and packet range;
-   an overview of packets, protocols, top talkers and ports.
-2. **Choose what to replay**: pick TCP or UDP (never guessed), then tick conversations in one table (filtered to
-   what the mode can send). Tick none to send everything; a ticked conversation can be edited (addresses, ports,
-   payload) and the others are sent only if you ask for them.
-3. **Settings**: timing, TCP stream options, recording, backend, and the advanced rewrite-every-packet option.
-4. **Send**: always visible beside the steps. A plain-language summary says exactly what will be sent, then
-   live counters, TCP session details, recording status and the log.
+1. **Open a capture.** A welcome screen with *Open a capture file…*, a path box, the bundled example and your
+   recent files. The file is analysed straight away, with a progress bar.
+2. **Choose conversations** (left). Every exchange in the capture is one readable row (service name such as HTTP,
+   DNS or Syslog, who talks to whom, size, TCP state). Tick the rows to send, filter by TCP/UDP or search. Nothing
+   is sent unless you ticked it. *Change…* on a ticked row edits that conversation's destination, source or payload
+   text, with a live "will be sent as" preview and the original shown underneath.
+3. **Send** (right, always in view). Choose **TCP or UDP** (required, never guessed; the matching one is
+   suggested), **Send on the network** or **Test run**, an optional address to send everything to, the speed
+   (like the recording / faster / as fast as possible / custom) and whether to save a copy. A sentence states
+   exactly what will happen, and a line under the button says why *Send* is disabled when it is. Progress and
+   results replace the panel while it runs. Rare settings (repeat count, TCP stream offsets, network adapter,
+   payload text for all selected) are under *More options…*.
 
-Sending stays disabled until a capture and a transmission mode are chosen. Start it elevated
-(Administrator / root) for raw injection; the header badge shows whether it is (when it is not, the backend
-defaults to the dry run).
+When the program is not running as administrator, *Send on the network* is disabled and a *Restart as
+administrator* button relaunches it elevated (after the Windows prompt).
 
 Security model: the server listens on **loopback only** (it refuses any other address), every request needs a
 random per-launch token (the printed URL contains it and is exchanged for an HttpOnly, SameSite=Strict cookie),
