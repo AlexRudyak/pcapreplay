@@ -4,10 +4,12 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"os"
 	"sync"
 	"time"
 
 	"github.com/sasha/pktreplay/internal/filter"
+	"github.com/sasha/pktreplay/internal/history"
 	"github.com/sasha/pktreplay/internal/record"
 	"github.com/sasha/pktreplay/internal/replay"
 	"github.com/sasha/pktreplay/internal/stats"
@@ -43,9 +45,12 @@ type manager struct {
 	result   string
 	tcp      *tcpView
 	rec      *record.Writer
+	runID    string // history entry of the current/last replay
+
+	hist *history.Store // nil: history disabled
 }
 
-func newManager() *manager { return &manager{state: stateIdle} }
+func newManager(h *history.Store) *manager { return &manager{state: stateIdle, hist: h} }
 
 type tcpView struct {
 	Flow        string  `json:"flow"`
@@ -71,6 +76,7 @@ type StatusView struct {
 	Replay     *replayView    `json:"replay,omitempty"`
 	TCP        *tcpView       `json:"tcp,omitempty"`
 	Recording  *recView       `json:"recording,omitempty"`
+	RunID      string         `json:"runId,omitempty"` // history entry of this replay
 }
 
 type recView struct {
@@ -121,7 +127,7 @@ func (m *manager) begin(kind string) (context.Context, error) {
 	// Reset field by field: overwriting the struct would clobber the held mutex.
 	m.kind, m.state, m.cancel, m.started, m.finished = kind, stateRunning, cancel, time.Now(), time.Time{}
 	m.errMsg, m.log = "", nil
-	m.scan, m.summary, m.counters, m.result, m.tcp, m.rec = nil, nil, nil, "", nil, nil
+	m.scan, m.summary, m.counters, m.result, m.tcp, m.rec, m.runID = nil, nil, nil, "", nil, nil, ""
 	return ctx, nil
 }
 
@@ -139,6 +145,20 @@ func (m *manager) finish(err error) {
 	}
 	if m.cancel != nil {
 		m.cancel()
+	}
+}
+
+// Wait blocks until no job is running or the timeout expires.
+func (m *manager) Wait(timeout time.Duration) {
+	deadline := time.Now().Add(timeout)
+	for time.Now().Before(deadline) {
+		m.mu.Lock()
+		running := m.state == stateRunning
+		m.mu.Unlock()
+		if !running {
+			return
+		}
+		time.Sleep(20 * time.Millisecond)
 	}
 }
 
@@ -205,19 +225,56 @@ func (m *manager) StartReplay(req *ReplayRequest) error {
 	}
 	ctx, err := m.begin("replay")
 	if err != nil {
+		if r, ok := cfg.Backend.(*record.Recorder); ok {
+			r.Writer().Close() // buildConfig already created the user's recording file
+		}
 		return err
 	}
 	cnt := &replay.Counters{}
 	cfg.Progress = cnt
 	cfg.TCP.Trace = func(f string, a ...any) { m.logf("[tcp] "+f, a...) }
-	rec, _ := cfg.Backend.(*record.Recorder)
+	rec, _ := cfg.Backend.(*record.Recorder) // the recording the user asked for, if any
+	backendName := cfg.Backend.Name()
+	if rec != nil {
+		backendName = rec.Backend.Name()
+	}
+
+	// History: the entry is written first, so a crash leaves an "interrupted" record.
+	var runID string
+	var histW *record.Writer
+	if m.hist != nil {
+		if st := m.hist.Settings(); st.SaveHistory {
+			runID = history.NewID()
+			if st.SavePackets {
+				if w, werr := record.Create(m.hist.PacketsPath(runID)); werr != nil {
+					m.logf("history: cannot keep a copy of the packets: %v", werr)
+				} else {
+					histW = w
+					if rec != nil {
+						rec.Also(w)
+					} else {
+						cfg.Backend = record.Wrap(cfg.Backend, w, true)
+					}
+				}
+			}
+			if perr := m.hist.Put(newRunRecord(runID, req, tr, backendName)); perr != nil {
+				m.logf("history: cannot save this run: %v", perr)
+				runID = ""
+				if histW != nil {
+					histW.Close()
+					os.Remove(histW.Path())
+					histW = nil
+				}
+			}
+		}
+	}
 	m.mu.Lock()
-	m.counters = cnt
+	m.counters, m.runID = cnt, runID
 	if rec != nil {
 		m.rec = rec.Writer()
 	}
 	m.mu.Unlock()
-	m.logf("starting %s replay of %s via %s backend", tr, req.Path, cfg.Backend.Name())
+	m.logf("starting %s replay of %s via %s backend", tr, req.Path, backendName)
 	go func() {
 		var res *replay.Result
 		var err error
@@ -231,16 +288,28 @@ func (m *manager) StartReplay(req *ReplayRequest) error {
 			n, b := rec.Writer().Stats()
 			m.logf("recorded %d packets (%d bytes) to %s", n, b, rec.Writer().Path())
 		}
+		// The engines end cleanly when cancelled; the job context tells us the user stopped it.
+		if err == nil && ctx.Err() != nil {
+			err = context.Canceled
+		}
+		var tv *tcpView
 		m.mu.Lock()
 		if res != nil {
 			m.result = res.String()
 			if t := res.TCP; t != nil {
-				m.tcp = &tcpView{Flow: t.Flow.String(), LocalIP: t.Live.LocalIP.String(), LocalPort: t.Live.LocalPort,
+				tv = &tcpView{Flow: t.Flow.String(), LocalIP: t.Live.LocalIP.String(), LocalPort: t.Live.LocalPort,
 					HandshakeUs: float64(t.HandshakeRTT) / float64(time.Microsecond), Retransmits: t.Retransmits,
 					RxBytes: t.RxBytes, RxSegments: t.RxSegments, PeerClosed: t.PeerClosed, FinalState: t.FinalState}
+				m.tcp = tv
 			}
 		}
 		m.mu.Unlock()
+		if histW != nil {
+			histW.Close() // idempotent: flushed even if the backend never opened
+		}
+		if runID != "" {
+			m.finishRun(runID, histW, res, err, tv) // before the job is marked finished, so the UI finds it
+		}
 		if err != nil && !errors.Is(err, context.Canceled) {
 			m.logf("error: %v", err)
 		} else if err != nil {
@@ -257,7 +326,7 @@ func (m *manager) StartReplay(req *ReplayRequest) error {
 func (m *manager) Status() StatusView {
 	m.mu.Lock()
 	defer m.mu.Unlock()
-	v := StatusView{Kind: m.kind, State: m.state, Error: m.errMsg, Log: append([]string{}, m.log...), Summary: m.summary, TCP: m.tcp}
+	v := StatusView{Kind: m.kind, State: m.state, Error: m.errMsg, Log: append([]string{}, m.log...), Summary: m.summary, TCP: m.tcp, RunID: m.runID}
 	if v.State == "" {
 		v.State = stateIdle
 	}

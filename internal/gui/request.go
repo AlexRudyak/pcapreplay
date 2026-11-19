@@ -1,6 +1,7 @@
 package gui
 
 import (
+	"encoding/json"
 	"errors"
 	"fmt"
 	"net"
@@ -61,6 +62,10 @@ type ReplayRequest struct {
 	// Conversations are per-conversation rewrites (selected from the analysis).
 	Conversations     []ConvRuleRequest `json:"conversations"`
 	OnlyConversations bool              `json:"onlyConversations"`
+
+	// Meta is opaque interface state stored with the history entry so "send again"
+	// can restore the screen exactly; the server never interprets it.
+	Meta json.RawMessage `json:"meta,omitempty"`
 
 	Record   string `json:"record"`   // output file; empty = do not record
 	RecordRx bool   `json:"recordRx"` // also record replies received from the target

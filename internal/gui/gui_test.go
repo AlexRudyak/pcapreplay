@@ -362,8 +362,8 @@ func TestCancelAndBusy(t *testing.T) {
 	time.Sleep(80 * time.Millisecond)
 	c.do("POST", "/api/cancel", struct{}{}, nil)
 	st := c.waitDone()
-	if st.State != stateCancelled && st.State != stateDone {
-		t.Fatalf("state after cancel: %s (%s)", st.State, st.Error)
+	if st.State != stateCancelled {
+		t.Fatalf("a stopped replay must be reported as stopped, got %s (%s)", st.State, st.Error)
 	}
 	if st.Replay == nil || st.Replay.Sent == 0 || st.Replay.Sent >= 400 {
 		t.Fatalf("cancel did not stop mid-run: %+v", st.Replay)

@@ -27,6 +27,7 @@ import (
 	"time"
 
 	"github.com/sasha/pktreplay/internal/filter"
+	"github.com/sasha/pktreplay/internal/history"
 )
 
 //go:embed web/*
@@ -39,12 +40,24 @@ type Server struct {
 	token    string
 	hosts    map[string]bool
 	jobs     *manager
+	hist     *history.Store // nil when history is disabled
 	listener net.Listener
 	Version  string
 }
 
-// New binds addr (use "127.0.0.1:0" for a free port) and prepares the server.
-func New(addr, version string) (*Server, error) {
+// Options configures optional server features.
+type Options struct {
+	// DataDir is where the run history (and the packet copies of every run) is
+	// stored. Empty disables the history.
+	DataDir string
+}
+
+// New binds addr (use "127.0.0.1:0" for a free port) and prepares the server
+// without a persistent history.
+func New(addr, version string) (*Server, error) { return NewWithOptions(addr, version, Options{}) }
+
+// NewWithOptions is New with options.
+func NewWithOptions(addr, version string, opts Options) (*Server, error) {
 	host, _, err := net.SplitHostPort(addr)
 	if err != nil {
 		return nil, err
@@ -60,11 +73,19 @@ func New(addr, version string) (*Server, error) {
 	if _, err := rand.Read(raw[:]); err != nil {
 		return nil, err
 	}
+	var hist *history.Store
+	if opts.DataDir != "" {
+		if hist, err = history.Open(opts.DataDir); err != nil {
+			ln.Close()
+			return nil, fmt.Errorf("opening the history in %s: %w", opts.DataDir, err)
+		}
+	}
 	port := fmt.Sprint(ln.Addr().(*net.TCPAddr).Port)
 	return &Server{
 		token:    hex.EncodeToString(raw[:]),
 		hosts:    map[string]bool{"127.0.0.1:" + port: true, "localhost:" + port: true, "[::1]:" + port: true},
-		jobs:     newManager(),
+		jobs:     newManager(hist),
+		hist:     hist,
 		listener: ln,
 		Version:  version,
 	}, nil
@@ -84,7 +105,12 @@ func (s *Server) Serve() error {
 // Close stops listening and cancels any running job.
 func (s *Server) Close() error {
 	s.jobs.Stop()
-	return s.listener.Close()
+	s.jobs.Wait(3 * time.Second) // let a cancelled run write its final history entry
+	err := s.listener.Close()
+	if s.hist != nil {
+		s.hist.Close()
+	}
+	return err
 }
 
 // Handler returns the full HTTP handler (exported for tests).
@@ -101,6 +127,7 @@ func (s *Server) Handler() http.Handler {
 	mux.HandleFunc("/api/cancel", s.cancel)
 	mux.HandleFunc("/api/status", s.status)
 	mux.HandleFunc("/api/elevate", s.elevate)
+	s.historyRoutes(mux)
 	return s.guard(mux)
 }
 
