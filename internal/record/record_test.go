@@ -124,6 +124,38 @@ func TestRecorderCapturesOnlyAcceptedPacketsAndReplies(t *testing.T) {
 	}
 }
 
+func TestPcapngDirectionAndMultipleWriters(t *testing.T) {
+	dir := t.TempDir()
+	p1, p2 := filepath.Join(dir, "a.pcapng"), filepath.Join(dir, "b.pcapng")
+	w1, _ := Create(p1)
+	w2, _ := Create(p2)
+	r := Wrap(&fake{reply: datagram(50)}, w1, true)
+	r.Also(w2)
+	r.SendBatch([][]byte{datagram(1), datagram(2)})
+	r.Recv(make([]byte, 2000), time.Second)
+	if err := r.Close(); err != nil {
+		t.Fatal(err)
+	}
+	for _, p := range []string{p1, p2} {
+		rd, err := pcapio.Open(p)
+		if err != nil {
+			t.Fatal(err)
+		}
+		var dirs []uint8
+		for {
+			pk, err := rd.Next()
+			if err != nil {
+				break
+			}
+			dirs = append(dirs, pk.Dir)
+		}
+		rd.Close()
+		if len(dirs) != 3 || dirs[0] != pcapio.DirOut || dirs[1] != pcapio.DirOut || dirs[2] != pcapio.DirIn {
+			t.Fatalf("%s: directions %v, want [out out in]", filepath.Base(p), dirs)
+		}
+	}
+}
+
 func TestInboundCanBeExcluded(t *testing.T) {
 	path := filepath.Join(t.TempDir(), "r.pcap")
 	w, _ := Create(path)

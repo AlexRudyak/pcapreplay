@@ -67,6 +67,30 @@ type Packet struct {
 	LinkType uint32
 	Offset   int64  // file offset of the record/block that held this packet
 	Index    uint64 // zero-based ordinal among packets returned by this reader
+	Dir      uint8  // PCAPNG epb_flags direction: DirUnknown, DirIn or DirOut
+}
+
+// Packet directions as stored in a PCAPNG enhanced packet block's epb_flags.
+const (
+	DirUnknown uint8 = 0
+	DirIn      uint8 = 1
+	DirOut     uint8 = 2
+)
+
+// epbDirection extracts the direction from the options following an EPB's data.
+func epbDirection(bo binary.ByteOrder, opts []byte) uint8 {
+	for len(opts) >= 4 {
+		code, olen := bo.Uint16(opts[0:2]), int(bo.Uint16(opts[2:4]))
+		pad := (olen + 3) &^ 3
+		if code == 0 || 4+pad > len(opts) {
+			return DirUnknown
+		}
+		if code == 2 && olen == 4 { // epb_flags: bits 0-1 hold the direction
+			return uint8(bo.Uint32(opts[4:8]) & 3)
+		}
+		opts = opts[4+pad:]
+	}
+	return DirUnknown
 }
 
 type iface struct {
@@ -384,8 +408,12 @@ func (r *Reader) nextPCAPNG() (*Packet, error) {
 				return nil, ErrFormat
 			}
 			ifc := r.ifaces[id]
+			var dir uint8
+			if end := 20 + int((capLen+3)&^3); end < len(body) {
+				dir = epbDirection(r.bo, body[end:])
+			}
 			r.pkt = Packet{Data: body[20 : 20+capLen], TsNanos: int64(ts * ifc.mul / ifc.div),
-				OrigLen: orig, LinkType: ifc.linkType, Offset: start, Index: r.count}
+				OrigLen: orig, LinkType: ifc.linkType, Offset: start, Index: r.count, Dir: dir}
 			r.count++
 			return &r.pkt, nil
 		case ngSPB:
