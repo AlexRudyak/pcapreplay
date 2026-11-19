@@ -365,7 +365,7 @@ func (m *manager) Status() StatusView {
 		v.ElapsedSec = end.Sub(m.started).Seconds()
 	}
 	if m.scan != nil {
-		sv := &scanView{Packets: m.scan.Packets.Load(), Bytes: m.scan.Bytes.Load(), Total: m.scan.Total}
+		sv := &scanView{Packets: m.scan.Packets.Load(), Bytes: m.scan.Bytes.Load(), Total: m.scan.Total.Load()}
 		if sv.Total > 0 {
 			sv.Percent = 100 * float64(sv.Bytes) / float64(sv.Total)
 		}

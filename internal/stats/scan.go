@@ -16,7 +16,7 @@ import (
 type Progress struct {
 	Packets atomic.Uint64 // packets read so far
 	Bytes   atomic.Int64  // file offset reached
-	Total   int64         // file size (0 if unknown)
+	Total   atomic.Int64  // file size (0 if unknown)
 }
 
 // NamedCount is a labelled counter.
@@ -147,7 +147,7 @@ func ScanWith(ctx context.Context, path string, flt *filter.Filter, position fun
 	}
 	if prog != nil {
 		if fi, err := os.Stat(path); err == nil {
-			prog.Total = fi.Size()
+			prog.Total.Store(fi.Size())
 		}
 	}
 	if position != nil {
