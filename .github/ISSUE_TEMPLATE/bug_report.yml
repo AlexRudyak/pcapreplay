@@ -1,0 +1,35 @@
+name: Bug report
+description: Something does not work as documented
+labels: [bug]
+body:
+  - type: textarea
+    id: what
+    attributes:
+      label: What happened, and what did you expect?
+    validations:
+      required: true
+  - type: textarea
+    id: repro
+    attributes:
+      label: How to reproduce
+      description: The exact command line (or GUI steps). A tiny capture that triggers it helps a lot, but do not attach captures that contain private data.
+      render: shell
+    validations:
+      required: true
+  - type: textarea
+    id: log
+    attributes:
+      label: Output with -vv
+      description: Re-run with `-vv` (or `-vvv` with `-count 20`) and paste the log. Remove private addresses if needed.
+      render: text
+  - type: input
+    id: version
+    attributes:
+      label: Version (`pktreplay version`)
+  - type: dropdown
+    id: os
+    attributes:
+      label: Operating system
+      options: [Windows, Linux, Other]
+    validations:
+      required: true

@@ -1,0 +1,57 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+permissions:
+  contents: read
+
+jobs:
+  test:
+    name: test (${{ matrix.os }}, Go ${{ matrix.go }})
+    runs-on: ${{ matrix.os }}
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-latest, windows-latest]
+        go: ["1.22", "stable"]
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-go@v5
+        with:
+          go-version: ${{ matrix.go }}
+      - name: Formatting
+        if: matrix.os == 'ubuntu-latest'
+        run: test -z "$(gofmt -l .)" || { gofmt -l .; exit 1; }
+      - name: Vet
+        run: go vet ./...
+      - name: Build
+        run: go build ./...
+      - name: Test
+        run: go test -count=1 ./...
+      - name: Test (race detector)
+        if: matrix.os == 'ubuntu-latest'
+        run: go test -race -count=1 ./...
+
+  cross-compile:
+    name: cross-compile
+    runs-on: ubuntu-latest
+    strategy:
+      matrix:
+        target: [linux/amd64, linux/arm64, linux/386, windows/amd64, windows/arm64]
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-go@v5
+        with:
+          go-version: stable
+      - name: Build ${{ matrix.target }}
+        env:
+          CGO_ENABLED: "0"
+        run: |
+          GOOS=${{ matrix.target }}
+          GOOS=${GOOS%/*} GOARCH=${{ matrix.target }}
+          GOARCH=${GOARCH#*/}
+          export GOOS GOARCH
+          go build -o /dev/null ./cmd/pktreplay
