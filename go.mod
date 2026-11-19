@@ -1,3 +1,3 @@
-module github.com/sasha/pktreplay
+module github.com/AlexRudyak/pktreplay
 
 go 1.22

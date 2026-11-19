@@ -9,13 +9,13 @@ import (
 	"testing"
 	"time"
 
-	"github.com/sasha/pktreplay/internal/backend"
-	"github.com/sasha/pktreplay/internal/craft"
-	"github.com/sasha/pktreplay/internal/decode"
-	"github.com/sasha/pktreplay/internal/filter"
-	"github.com/sasha/pktreplay/internal/mutate"
-	"github.com/sasha/pktreplay/internal/pace"
-	"github.com/sasha/pktreplay/internal/pcapio"
+	"github.com/AlexRudyak/pktreplay/internal/backend"
+	"github.com/AlexRudyak/pktreplay/internal/craft"
+	"github.com/AlexRudyak/pktreplay/internal/decode"
+	"github.com/AlexRudyak/pktreplay/internal/filter"
+	"github.com/AlexRudyak/pktreplay/internal/mutate"
+	"github.com/AlexRudyak/pktreplay/internal/pace"
+	"github.com/AlexRudyak/pktreplay/internal/pcapio"
 )
 
 func ip(s string) netip.Addr { return netip.MustParseAddr(s) }

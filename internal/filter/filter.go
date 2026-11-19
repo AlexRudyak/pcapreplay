@@ -29,7 +29,7 @@ import (
 	"strconv"
 	"strings"
 
-	"github.com/sasha/pktreplay/internal/decode"
+	"github.com/AlexRudyak/pktreplay/internal/decode"
 )
 
 type matchFn func(frame []byte, in *decode.Info) bool
@@ -86,6 +86,7 @@ type token struct {
 	quoted bool
 }
 
+// lex splits a filter expression into tokens: words, operators, quoted strings and parentheses.
 func lex(s string) ([]token, error) {
 	var out []token
 	for i := 0; i < len(s); {
@@ -159,6 +160,7 @@ func (p *parser) peek() *token {
 	return nil
 }
 
+// kw consumes and reports the next token if it is one of words (case-insensitive).
 func (p *parser) kw(words ...string) bool {
 	t := p.peek()
 	if t == nil || t.quoted {
@@ -181,6 +183,8 @@ func (p *parser) next() (token, error) {
 	return p.toks[p.pos-1], nil
 }
 
+// combine joins kids with AND (or OR when and is false) and orders them cheapest first, so
+// header tests run before payload scans.
 func combine(kids []*node, and bool) *node {
 	if len(kids) == 1 {
 		return kids[0]
@@ -211,6 +215,7 @@ func combine(kids []*node, and bool) *node {
 	}}
 }
 
+// or parses  and { (OR | "||") and }.
 func (p *parser) or() (*node, error) {
 	kids := []*node{}
 	for {
@@ -225,6 +230,7 @@ func (p *parser) or() (*node, error) {
 	}
 }
 
+// and parses  unary { (AND | "&&") unary }.
 func (p *parser) and() (*node, error) {
 	kids := []*node{}
 	for {
@@ -239,6 +245,7 @@ func (p *parser) and() (*node, error) {
 	}
 }
 
+// unary parses  [NOT | "!"] ( "(" or ")" | comparison ).
 func (p *parser) unary() (*node, error) {
 	if p.kw("not", "!") {
 		n, err := p.unary()
@@ -263,6 +270,7 @@ func (p *parser) unary() (*node, error) {
 	return p.cmp()
 }
 
+// cmp parses one comparison "field op value" and dispatches to the node builder for the field.
 func (p *parser) cmp() (*node, error) {
 	fld, err := p.next()
 	if err != nil {
@@ -314,6 +322,7 @@ func (p *parser) cmp() (*node, error) {
 	return n, nil
 }
 
+// ipNode builds a test on the source, destination or either address; val may be a CIDR prefix.
 func ipNode(field, val string) (*node, error) {
 	var pfx netip.Prefix
 	if strings.Contains(val, "/") {
@@ -343,6 +352,7 @@ func ipNode(field, val string) (*node, error) {
 	return &node{fn: fn}, nil
 }
 
+// portNode builds a test on a port; val is a number or a "lo-hi" range.
 func portNode(field, val string) (*node, error) {
 	lo, hi := uint64(0), uint64(0)
 	var err error
@@ -371,6 +381,7 @@ func portNode(field, val string) (*node, error) {
 	return &node{fn: fn}, nil
 }
 
+// protoNode builds a test on the protocol (tcp, udp, icmp, icmp6, arp, ip, ipv6 or a number).
 func protoNode(val string) (*node, error) {
 	var fn matchFn
 	switch strings.ToLower(val) {
@@ -398,6 +409,7 @@ func protoNode(val string) (*node, error) {
 	return &node{fn: fn}, nil
 }
 
+// flagsNode builds a test on TCP flags written like "syn+ack".
 func flagsNode(val string) (*node, error) {
 	var mask uint8
 	names := map[string]uint8{"fin": decode.FIN, "syn": decode.SYN, "rst": decode.RST,
@@ -414,6 +426,8 @@ func flagsNode(val string) (*node, error) {
 	}}, nil
 }
 
+// payloadNode builds a payload test: "contains" (text or 0x hex), "==" or "~" (regular expression).
+// It is always ordered after the header tests.
 func payloadNode(op string, v token) (*node, error) {
 	switch op {
 	case "contains", "==":

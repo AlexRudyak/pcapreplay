@@ -9,7 +9,7 @@ import (
 	"testing"
 	"time"
 
-	"github.com/sasha/pktreplay/internal/history"
+	"github.com/AlexRudyak/pktreplay/internal/history"
 )
 
 func newTCHist(t *testing.T) (*tc, string) {

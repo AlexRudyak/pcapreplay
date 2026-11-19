@@ -13,8 +13,8 @@ import (
 	"time"
 	"unsafe"
 
-	"github.com/sasha/pktreplay/internal/decode"
-	"github.com/sasha/pktreplay/internal/pcapio"
+	"github.com/AlexRudyak/pktreplay/internal/decode"
+	"github.com/AlexRudyak/pktreplay/internal/pcapio"
 )
 
 const (
@@ -50,6 +50,7 @@ type mmsghdr struct {
 // NewLinux returns an unopened Linux backend.
 func NewLinux() *Linux { return &Linux{sfd: -1, rfd: -1} }
 
+// Name implements Backend.
 func (l *Linux) Name() string { return "linux-afpacket" }
 
 func htons(v uint16) uint16 { return v<<8 | v>>8 }
@@ -66,6 +67,8 @@ func rawSocket(proto uint16, ifindex int) (int, error) {
 	return fd, nil
 }
 
+// Open picks the egress interface and next-hop MAC for o.Target and opens the AF_PACKET
+// transmit socket (plus a second one for receiving in TCP mode).
 func (l *Linux) Open(o Options) error {
 	l.opts = o
 	if !o.Target.IsValid() {
@@ -110,6 +113,8 @@ func (l *Linux) Open(o Options) error {
 	return nil
 }
 
+// SendBatch prepends the Ethernet header to each datagram and transmits them with
+// sendmmsg(2), up to 256 frames per system call. It returns how many were accepted.
 func (l *Linux) SendBatch(pkts [][]byte) (int, error) {
 	sent := 0
 	for sent < len(pkts) {
@@ -150,6 +155,9 @@ func (l *Linux) SendBatch(pkts [][]byte) (int, error) {
 	return sent, nil
 }
 
+// Guard installs the firewall rule that drops the kernel's own RST for the flow (unless
+// Options.NoFirewall is set) and starts filtering received frames to that 4-tuple.
+// The returned function removes the rule again.
 func (l *Linux) Guard(f Flow) (func() error, error) {
 	l.flow = f
 	var err error
@@ -175,6 +183,8 @@ func (l *Linux) Guard(f Flow) (func() error, error) {
 	}, nil
 }
 
+// Recv waits up to timeout for a frame of the guarded flow and copies its IP datagram into
+// buf. Frames the kernel transmitted itself (PACKET_OUTGOING) are ignored.
 func (l *Linux) Recv(buf []byte, timeout time.Duration) (int, error) {
 	deadline := time.Now().Add(timeout)
 	var in decode.Info
@@ -207,6 +217,7 @@ func (l *Linux) Recv(buf []byte, timeout time.Duration) (int, error) {
 	}
 }
 
+// Close releases the sockets and any firewall rule still installed.
 func (l *Linux) Close() error {
 	if l.release != nil {
 		l.release()
@@ -223,6 +234,8 @@ func (l *Linux) Close() error {
 
 // ---- interface and next-hop discovery ----
 
+// pickInterface returns the interface named in o, or the one the routing table would use to
+// reach o.Target.
 func pickInterface(o Options) (*net.Interface, error) {
 	if o.Iface != "" {
 		return net.InterfaceByName(o.Iface)
@@ -279,6 +292,7 @@ func gatewayFor(ifc *net.Interface) (netip.Addr, bool) {
 	return netip.Addr{}, false
 }
 
+// splitLines splits s into lines, tolerating both LF and CRLF endings.
 func splitLines(s string) []string {
 	var out []string
 	for len(s) > 0 {
@@ -295,6 +309,8 @@ func splitLines(s string) []string {
 	return out
 }
 
+// resolveNextHop finds the MAC address to put on frames for target: the neighbour table
+// entry, the default gateway's, or the answer to an ARP probe sent on ifc.
 func resolveNextHop(ifc *net.Interface, target netip.Addr) ([6]byte, error) {
 	hop := target
 	if !onLink(ifc, target) {

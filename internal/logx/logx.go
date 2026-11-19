@@ -21,6 +21,7 @@ const (
 	Trace              // everything: one line for every packet read
 )
 
+// String returns the level name used in flags and log lines.
 func (l Level) String() string {
 	switch l {
 	case Info:
@@ -79,6 +80,11 @@ func (l *Logger) logf(lv Level, comp, format string, a ...any) {
 	l.mu.Unlock()
 }
 
-func (l *Logger) Infof(comp, format string, a ...any)  { l.logf(Info, comp, format, a...) }
+// Infof logs at Info level. comp is a short component name such as "replay" or "tcp".
+func (l *Logger) Infof(comp, format string, a ...any) { l.logf(Info, comp, format, a...) }
+
+// Debugf logs at Debug level.
 func (l *Logger) Debugf(comp, format string, a ...any) { l.logf(Debug, comp, format, a...) }
+
+// Tracef logs at Trace level (per packet).
 func (l *Logger) Tracef(comp, format string, a ...any) { l.logf(Trace, comp, format, a...) }

@@ -11,9 +11,10 @@ import (
 	"net/netip"
 	"os"
 
-	"github.com/sasha/pktreplay/internal/craft"
+	"github.com/AlexRudyak/pktreplay/internal/craft"
 )
 
+// main parses the flags and writes the requested synthetic capture.
 func main() {
 	out := flag.String("o", "synthetic.pcap", "output file")
 	n := flag.Int("n", 1_000_000, "number of packets")

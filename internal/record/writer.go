@@ -65,6 +65,7 @@ func Create(path string) (*Writer, error) {
 	return w, nil
 }
 
+// writeNGHeaders writes the PCAPNG section header and the interface description block.
 func (w *Writer) writeNGHeaders() {
 	le := binary.LittleEndian
 	// Section header block (28 bytes, unknown section length).

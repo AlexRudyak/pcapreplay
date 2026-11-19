@@ -14,14 +14,14 @@ import (
 	"sync/atomic"
 	"time"
 
-	"github.com/sasha/pktreplay/internal/backend"
-	"github.com/sasha/pktreplay/internal/conv"
-	"github.com/sasha/pktreplay/internal/decode"
-	"github.com/sasha/pktreplay/internal/filter"
-	"github.com/sasha/pktreplay/internal/logx"
-	"github.com/sasha/pktreplay/internal/mutate"
-	"github.com/sasha/pktreplay/internal/pace"
-	"github.com/sasha/pktreplay/internal/pcapio"
+	"github.com/AlexRudyak/pktreplay/internal/backend"
+	"github.com/AlexRudyak/pktreplay/internal/conv"
+	"github.com/AlexRudyak/pktreplay/internal/decode"
+	"github.com/AlexRudyak/pktreplay/internal/filter"
+	"github.com/AlexRudyak/pktreplay/internal/logx"
+	"github.com/AlexRudyak/pktreplay/internal/mutate"
+	"github.com/AlexRudyak/pktreplay/internal/pace"
+	"github.com/AlexRudyak/pktreplay/internal/pcapio"
 )
 
 // Transport is the user-selected replay mode.
@@ -32,6 +32,7 @@ const (
 	TCP
 )
 
+// String returns "tcp" or "udp".
 func (t Transport) String() string {
 	if t == TCP {
 		return "tcp"
@@ -119,6 +120,7 @@ type Result struct {
 	TCP      *TCPStats // set in TCP mode
 }
 
+// String formats the counters, elapsed time and rates on one line.
 func (r *Result) String() string {
 	c := r.Counters
 	s := r.Elapsed.Seconds()
@@ -155,6 +157,7 @@ func (c *Config) counters() *Counters {
 	return cnt
 }
 
+// defaults fills in unset fields: one pass, queue depth 4096, batch 64, empty filter.
 func (c *Config) defaults() {
 	if c.Loop < 1 {
 		c.Loop = 1
@@ -446,6 +449,7 @@ func describeRewrite(rw *mutate.Rewrite) string {
 	return s
 }
 
+// describePace renders a pacing configuration in words for the diagnostic log.
 func describePace(c pace.Config) string {
 	switch c.Mode {
 	case pace.Original:

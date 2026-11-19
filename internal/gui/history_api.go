@@ -7,9 +7,11 @@ import (
 	"strconv"
 	"time"
 
-	"github.com/sasha/pktreplay/internal/history"
+	"github.com/AlexRudyak/pktreplay/internal/history"
 )
 
+// historyRoutes registers the history and settings endpoints. They are only active when the
+// server was started with a data directory.
 func (s *Server) historyRoutes(mux *http.ServeMux) {
 	mux.HandleFunc("GET /api/history", s.histList)
 	mux.HandleFunc("GET /api/history/settings", s.histGetSettings)
@@ -64,6 +66,7 @@ func queryOf(r *http.Request) history.Query {
 	return q
 }
 
+// histList answers GET /api/history: a filtered, paged list of runs.
 func (s *Server) histList(w http.ResponseWriter, r *http.Request) {
 	if s.hist == nil {
 		writeJSON(w, 200, map[string]any{"enabled": false, "runs": []history.Run{}, "total": 0})
@@ -86,6 +89,7 @@ func (s *Server) histList(w http.ResponseWriter, r *http.Request) {
 	writeJSON(w, 200, map[string]any{"enabled": true, "runs": runs, "total": total, "stats": s.hist.Stats(), "settings": s.hist.Settings()})
 }
 
+// histGet answers GET /api/history/{id}: one run with its library entry and the path "send again" can open.
 func (s *Server) histGet(w http.ResponseWriter, r *http.Request) {
 	run, ok := s.needRun(w, r)
 	if !ok {
@@ -110,6 +114,7 @@ func (s *Server) histGet(w http.ResponseWriter, r *http.Request) {
 	writeJSON(w, 200, resp)
 }
 
+// histUpdate applies a note and/or pinned change to one run.
 func (s *Server) histUpdate(w http.ResponseWriter, r *http.Request) {
 	run, ok := s.needRun(w, r)
 	if !ok {
@@ -141,6 +146,7 @@ func (s *Server) histUpdate(w http.ResponseWriter, r *http.Request) {
 	writeJSON(w, 200, map[string]any{"run": updated})
 }
 
+// histDelete removes one run (its library entry stays).
 func (s *Server) histDelete(w http.ResponseWriter, r *http.Request) {
 	run, ok := s.needRun(w, r)
 	if !ok {
@@ -161,6 +167,7 @@ func (s *Server) histDelete(w http.ResponseWriter, r *http.Request) {
 	writeJSON(w, 200, map[string]bool{"deleted": true})
 }
 
+// histClear removes every unpinned run, or every run when asked to include pinned ones.
 func (s *Server) histClear(w http.ResponseWriter, r *http.Request) {
 	if !s.needHistory(w) {
 		return
@@ -190,6 +197,7 @@ func (s *Server) histGetSettings(w http.ResponseWriter, r *http.Request) {
 	writeJSON(w, 200, map[string]any{"settings": s.hist.Settings(), "stats": s.hist.Stats()})
 }
 
+// histSetSettings validates and stores the retention settings, then prunes accordingly.
 func (s *Server) histSetSettings(w http.ResponseWriter, r *http.Request) {
 	if !s.needHistory(w) {
 		return
@@ -206,6 +214,7 @@ func (s *Server) histSetSettings(w http.ResponseWriter, r *http.Request) {
 	writeJSON(w, 200, map[string]any{"settings": s.hist.Settings(), "stats": s.hist.Stats(), "removedRuns": removed, "removedPacketCopies": pruned})
 }
 
+// histExport streams the history as CSV or JSON (CSV cells are protected against spreadsheet formulas).
 func (s *Server) histExport(w http.ResponseWriter, r *http.Request) {
 	if !s.needHistory(w) {
 		return
@@ -228,6 +237,7 @@ func (s *Server) histExport(w http.ResponseWriter, r *http.Request) {
 	}
 }
 
+// histPackets downloads the optional packet copy of a run as a PCAPNG file.
 func (s *Server) histPackets(w http.ResponseWriter, r *http.Request) {
 	run, ok := s.needRun(w, r)
 	if !ok {
@@ -243,6 +253,7 @@ func (s *Server) histPackets(w http.ResponseWriter, r *http.Request) {
 	http.ServeFile(w, r, p)
 }
 
+// histPreview returns a page of decoded packets from a run's packet copy.
 func (s *Server) histPreview(w http.ResponseWriter, r *http.Request) {
 	run, ok := s.needRun(w, r)
 	if !ok {

@@ -10,13 +10,13 @@ import (
 	"sync/atomic"
 	"time"
 
-	"github.com/sasha/pktreplay/internal/backend"
-	"github.com/sasha/pktreplay/internal/conv"
-	"github.com/sasha/pktreplay/internal/craft"
-	"github.com/sasha/pktreplay/internal/decode"
-	"github.com/sasha/pktreplay/internal/mutate"
-	"github.com/sasha/pktreplay/internal/pace"
-	"github.com/sasha/pktreplay/internal/pcapio"
+	"github.com/AlexRudyak/pktreplay/internal/backend"
+	"github.com/AlexRudyak/pktreplay/internal/conv"
+	"github.com/AlexRudyak/pktreplay/internal/craft"
+	"github.com/AlexRudyak/pktreplay/internal/decode"
+	"github.com/AlexRudyak/pktreplay/internal/mutate"
+	"github.com/AlexRudyak/pktreplay/internal/pace"
+	"github.com/AlexRudyak/pktreplay/internal/pcapio"
 )
 
 // Errors reported by the TCP engine.
@@ -61,6 +61,7 @@ type FlowKey struct {
 	ClientPort, ServerPort uint16
 }
 
+// String formats the flow as "client:port > server:port".
 func (k FlowKey) String() string {
 	return fmt.Sprintf("%s -> %s", netip.AddrPortFrom(k.Client, k.ClientPort), netip.AddrPortFrom(k.Server, k.ServerPort))
 }
@@ -86,6 +87,8 @@ func ProbeFlow(cfg *Config) (FlowKey, error) { return probe(cfg, decode.ProtoTCP
 // used to learn the destination before the backend is opened.
 func ProbeUDP(cfg *Config) (FlowKey, error) { return probe(cfg, decode.ProtoUDP) }
 
+// probe scans the capture for the first packet of protocol proto that passes the filter
+// and the conversation selection, and returns its tuple.
 func probe(cfg *Config, proto uint8) (FlowKey, error) {
 	cfg.defaults()
 	if cfg.convSet == nil {
@@ -472,6 +475,9 @@ func (s *tcpSession) pump(wait time.Duration) (bool, error) {
 	}
 }
 
+// handle processes one inbound segment from the server: updates the send window, releases
+// acknowledged segments, detects duplicate ACKs, tracks in-order data and FIN, and
+// reports RST as ErrReset.
 func (s *tcpSession) handle(b *mutate.Buf) (bool, error) {
 	var in decode.Info
 	if !decode.Decode(pcapio.LinkRaw, b.B, &in) || in.Proto != decode.ProtoTCP || !in.HasPorts {
@@ -601,6 +607,9 @@ func (s *tcpSession) drain(q <-chan item) {
 	}()
 }
 
+// replayOne rewrites one captured client segment for the live connection (stream anchoring,
+// skip bytes, payload rewrites, sequence/ack mapping), waits for the pacer and the peer's
+// window, sends it and keeps it for retransmission until acknowledged.
 func (s *tcpSession) replayOne(it item, pc *pace.Pacer, cnt *Counters, local, userRW *mutate.Rewrite) error {
 	b := it.buf
 	in := &b.In

@@ -12,7 +12,7 @@ import (
 	"testing"
 	"time"
 
-	"github.com/sasha/pktreplay/internal/craft"
+	"github.com/AlexRudyak/pktreplay/internal/craft"
 )
 
 // tc is a test client talking to a real Server on a real loopback listener, so

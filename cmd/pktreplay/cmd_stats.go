@@ -8,11 +8,11 @@ import (
 	"os"
 	"time"
 
-	"github.com/sasha/pktreplay/internal/decode"
-	"github.com/sasha/pktreplay/internal/filter"
-	"github.com/sasha/pktreplay/internal/logx"
-	"github.com/sasha/pktreplay/internal/pcapio"
-	"github.com/sasha/pktreplay/internal/stats"
+	"github.com/AlexRudyak/pktreplay/internal/decode"
+	"github.com/AlexRudyak/pktreplay/internal/filter"
+	"github.com/AlexRudyak/pktreplay/internal/logx"
+	"github.com/AlexRudyak/pktreplay/internal/pcapio"
+	"github.com/AlexRudyak/pktreplay/internal/stats"
 )
 
 // rangeFlags are shared by commands that can inspect a slice of a capture.
@@ -58,6 +58,7 @@ func (r *rangeFlags) position(rd *pcapio.Reader, capture string) error {
 	return nil
 }
 
+// cmdStats implements "pktreplay stats".
 func cmdStats(args []string) error {
 	fs := flag.NewFlagSet("stats", flag.ExitOnError)
 	var rf rangeFlags
@@ -147,6 +148,7 @@ func cmdStats(args []string) error {
 	return nil
 }
 
+// cmdIndex implements "pktreplay index".
 func cmdIndex(args []string) error {
 	fs := flag.NewFlagSet("index", flag.ExitOnError)
 	var lf logFlags

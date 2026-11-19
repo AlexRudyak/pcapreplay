@@ -6,10 +6,10 @@ import (
 	"os"
 	"sync/atomic"
 
-	"github.com/sasha/pktreplay/internal/conv"
-	"github.com/sasha/pktreplay/internal/decode"
-	"github.com/sasha/pktreplay/internal/filter"
-	"github.com/sasha/pktreplay/internal/pcapio"
+	"github.com/AlexRudyak/pktreplay/internal/conv"
+	"github.com/AlexRudyak/pktreplay/internal/decode"
+	"github.com/AlexRudyak/pktreplay/internal/filter"
+	"github.com/AlexRudyak/pktreplay/internal/pcapio"
 )
 
 // Progress is updated atomically by Scan so another goroutine can poll it.

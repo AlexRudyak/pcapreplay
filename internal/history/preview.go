@@ -5,8 +5,8 @@ import (
 	"io"
 	"strings"
 
-	"github.com/sasha/pktreplay/internal/decode"
-	"github.com/sasha/pktreplay/internal/pcapio"
+	"github.com/AlexRudyak/pktreplay/internal/decode"
+	"github.com/AlexRudyak/pktreplay/internal/pcapio"
 )
 
 // MaxPreview bounds how many packets one preview request returns.

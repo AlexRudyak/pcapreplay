@@ -7,8 +7,8 @@ import (
 	"net/netip"
 	"os"
 
-	"github.com/sasha/pktreplay/internal/checksum"
-	"github.com/sasha/pktreplay/internal/craft"
+	"github.com/AlexRudyak/pktreplay/internal/checksum"
+	"github.com/AlexRudyak/pktreplay/internal/craft"
 )
 
 var (
@@ -131,6 +131,7 @@ func genSample(path string) error {
 	return w.Flush()
 }
 
+// arp builds an ARP request or reply frame.
 func arp(op uint16, sMAC [6]byte, sIP netip.Addr, tMAC [6]byte, tIP netip.Addr, ethDst [6]byte) []byte {
 	f := make([]byte, 42)
 	copy(f[0:6], ethDst[:])
@@ -179,6 +180,7 @@ func dnsAnswer(query []byte, ans netip.Addr) []byte {
 	return append(m, a[:]...)
 }
 
+// icmpEcho builds an ICMP echo request or reply frame with correct checksums.
 func icmpEcho(sMAC, dMAC [6]byte, src, dst netip.Addr, typ uint8, ident, seq uint16, payload []byte, ipID uint16) []byte {
 	icmp := make([]byte, 8, 8+len(payload))
 	icmp[0] = typ

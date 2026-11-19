@@ -8,7 +8,7 @@ import (
 	"path/filepath"
 	"time"
 
-	"github.com/sasha/pktreplay/internal/history"
+	"github.com/AlexRudyak/pktreplay/internal/history"
 )
 
 // A running GUI records where it listens so that starting pktreplay again (the Start Menu entry, a

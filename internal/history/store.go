@@ -299,6 +299,7 @@ func (s *Store) compactLocked() error {
 	return err
 }
 
+// sorted returns the runs newest first.
 func (s *Store) sorted() []*Run {
 	out := make([]*Run, 0, len(s.runs))
 	for _, r := range s.runs {
@@ -313,6 +314,7 @@ func (s *Store) sorted() []*Run {
 	return out
 }
 
+// appendLocked writes one operation to the log and fsyncs it. The caller holds s.mu.
 func (s *Store) appendLocked(op logOp) error {
 	b, err := json.Marshal(op)
 	if err != nil {
@@ -387,6 +389,7 @@ func (s *Store) Get(id string) (Run, bool) {
 	return *r, true
 }
 
+// match reports whether run r satisfies every set field of the query.
 func (q Query) match(r *Run) bool {
 	if q.State != "" && r.State != q.State {
 		return false
@@ -455,6 +458,7 @@ func (s *Store) PacketsFile(id string) (string, bool) {
 	return p, true
 }
 
+// deleteLocked removes a run and its packet copy. The caller holds s.mu.
 func (s *Store) deleteLocked(id string) error {
 	r, ok := s.runs[id]
 	if !ok {

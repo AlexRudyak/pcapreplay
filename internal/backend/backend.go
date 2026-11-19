@@ -92,9 +92,17 @@ func LocalAddrFor(remote netip.Addr) (netip.Addr, error) {
 // pipeline without needing privileges or drivers.
 type Null struct{ Packets, Bytes uint64 }
 
-func (n *Null) Name() string       { return "null" }
+// Name implements Backend.
+func (n *Null) Name() string { return "null" }
+
+// Open implements Backend; the null backend holds no resources.
 func (n *Null) Open(Options) error { return nil }
-func (n *Null) Close() error       { return nil }
+
+// Close implements Backend.
+func (n *Null) Close() error { return nil }
+
+// SendBatch discards the packets and reports them all as sent, so the pipeline can be
+// benchmarked without privileges or a network.
 func (n *Null) SendBatch(p [][]byte) (int, error) {
 	for _, b := range p {
 		n.Packets++
@@ -102,7 +110,11 @@ func (n *Null) SendBatch(p [][]byte) (int, error) {
 	}
 	return len(p), nil
 }
+
+// Guard implements Backend; nothing needs protecting when nothing is sent.
 func (n *Null) Guard(Flow) (func() error, error) { return func() error { return nil }, nil }
+
+// Recv never receives anything: it waits for the timeout and returns ErrTimeout.
 func (n *Null) Recv([]byte, time.Duration) (int, error) {
 	return 0, errors.New("null backend cannot receive")
 }

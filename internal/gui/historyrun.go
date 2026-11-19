@@ -10,11 +10,12 @@ import (
 	"strings"
 	"time"
 
-	"github.com/sasha/pktreplay/internal/history"
-	"github.com/sasha/pktreplay/internal/record"
-	"github.com/sasha/pktreplay/internal/replay"
+	"github.com/AlexRudyak/pktreplay/internal/history"
+	"github.com/AlexRudyak/pktreplay/internal/record"
+	"github.com/AlexRudyak/pktreplay/internal/replay"
 )
 
+// describePacing renders the chosen speed in words for the run record.
 func describePacing(r *ReplayRequest) string {
 	switch r.PaceMode {
 	case "burst":
@@ -32,6 +33,7 @@ func describePacing(r *ReplayRequest) string {
 	return fmt.Sprintf("%g× recorded speed", r.Speed)
 }
 
+// joinEndpoint formats ip and port as "ip:port", bracketing IPv6 addresses and omitting a zero port.
 func joinEndpoint(ip string, port uint) string {
 	ip = strings.TrimSpace(ip)
 	switch {
@@ -48,6 +50,8 @@ func joinEndpoint(ip string, port uint) string {
 	return ""
 }
 
+// convEntries converts the selected conversations (and their edits) of a request into the
+// entries stored with the run.
 func convEntries(r *ReplayRequest) []history.ConvEntry {
 	out := make([]history.ConvEntry, 0, len(r.Conversations))
 	for _, c := range r.Conversations {
@@ -83,6 +87,7 @@ func targetOf(entries []history.ConvEntry) string {
 	return "several addresses"
 }
 
+// newRunRecord builds the history entry written before a send starts, in state "running".
 func newRunRecord(id string, req *ReplayRequest, tr replay.Transport, backendName, capture string) history.Run {
 	entries := convEntries(req)
 	reqJSON, _ := json.Marshal(req)

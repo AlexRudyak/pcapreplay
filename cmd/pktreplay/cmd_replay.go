@@ -12,20 +12,23 @@ import (
 	"strings"
 	"time"
 
-	"github.com/sasha/pktreplay/internal/backend"
-	"github.com/sasha/pktreplay/internal/conv"
-	"github.com/sasha/pktreplay/internal/filter"
-	"github.com/sasha/pktreplay/internal/logx"
-	"github.com/sasha/pktreplay/internal/mutate"
-	"github.com/sasha/pktreplay/internal/pace"
-	"github.com/sasha/pktreplay/internal/pcapio"
-	"github.com/sasha/pktreplay/internal/record"
-	"github.com/sasha/pktreplay/internal/replay"
+	"github.com/AlexRudyak/pktreplay/internal/backend"
+	"github.com/AlexRudyak/pktreplay/internal/conv"
+	"github.com/AlexRudyak/pktreplay/internal/filter"
+	"github.com/AlexRudyak/pktreplay/internal/logx"
+	"github.com/AlexRudyak/pktreplay/internal/mutate"
+	"github.com/AlexRudyak/pktreplay/internal/pace"
+	"github.com/AlexRudyak/pktreplay/internal/pcapio"
+	"github.com/AlexRudyak/pktreplay/internal/record"
+	"github.com/AlexRudyak/pktreplay/internal/replay"
 )
 
 type listFlag []string
 
-func (l *listFlag) String() string     { return strings.Join(*l, ",") }
+// String implements flag.Value.
+func (l *listFlag) String() string { return strings.Join(*l, ",") }
+
+// Set appends one occurrence of a repeatable flag.
 func (l *listFlag) Set(v string) error { *l = append(*l, v); return nil }
 
 func parseAddr(name, s string) (netip.Addr, error) {
@@ -52,6 +55,8 @@ func parseMAC(name, s string) (*[6]byte, error) {
 	return &m, nil
 }
 
+// cmdReplay implements "pktreplay replay": it parses the flags into a replay.Config, wires up
+// recording and logging, runs the UDP or TCP engine and prints the result.
 func cmdReplay(args []string) error {
 	fs := flag.NewFlagSet("replay", flag.ExitOnError)
 	fs.Usage = func() {

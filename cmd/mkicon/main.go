@@ -80,6 +80,7 @@ func render(size int) *image.NRGBA {
 	return img
 }
 
+// main renders the icon at each standard size and writes them into one .ico file.
 func main() {
 	out := flag.String("o", "pktreplay.ico", "output .ico file")
 	pngOut := flag.String("png", "", "also write the 256x256 frame as a PNG (for previews and docs)")

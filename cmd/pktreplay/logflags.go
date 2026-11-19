@@ -6,7 +6,7 @@ import (
 	"io"
 	"os"
 
-	"github.com/sasha/pktreplay/internal/logx"
+	"github.com/AlexRudyak/pktreplay/internal/logx"
 )
 
 // levelFlag is a boolean-style flag that raises the log level to a fixed value
@@ -16,8 +16,13 @@ type levelFlag struct {
 	lv  logx.Level
 }
 
-func (f levelFlag) String() string   { return "" }
+// String implements flag.Value.
+func (f levelFlag) String() string { return "" }
+
+// IsBoolFlag lets -v, -vv and -vvv be written without a value.
 func (f levelFlag) IsBoolFlag() bool { return true }
+
+// Set raises the log level to the flag's level (it never lowers it).
 func (f levelFlag) Set(s string) error {
 	if s == "true" && f.lv > *f.dst {
 		*f.dst = f.lv

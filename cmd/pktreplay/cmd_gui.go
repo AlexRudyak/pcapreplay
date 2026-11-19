@@ -11,10 +11,12 @@ import (
 	"os/signal"
 	"runtime"
 
-	"github.com/sasha/pktreplay/internal/gui"
-	"github.com/sasha/pktreplay/internal/history"
+	"github.com/AlexRudyak/pktreplay/internal/gui"
+	"github.com/AlexRudyak/pktreplay/internal/history"
 )
 
+// cmdGUI implements "pktreplay gui": it reopens a running instance when there is one, otherwise
+// starts the server, registers the instance and opens the browser.
 func cmdGUI(args []string) error {
 	fs := flag.NewFlagSet("gui", flag.ExitOnError)
 	addr := fs.String("addr", "127.0.0.1:0", "listen address (loopback only; port 0 picks a free port)")

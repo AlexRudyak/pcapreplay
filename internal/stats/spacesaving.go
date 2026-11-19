@@ -85,6 +85,7 @@ func (s *SpaceSaving[K]) up(i int) {
 	}
 }
 
+// down restores the min-heap property by sifting the entry at index i towards the leaves.
 func (s *SpaceSaving[K]) down(i int) {
 	n := len(s.heap)
 	for {

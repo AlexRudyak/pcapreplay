@@ -11,8 +11,8 @@ import (
 	"testing"
 	"time"
 
-	"github.com/sasha/pktreplay/internal/craft"
-	"github.com/sasha/pktreplay/internal/record"
+	"github.com/AlexRudyak/pktreplay/internal/craft"
+	"github.com/AlexRudyak/pktreplay/internal/record"
 )
 
 func mkRun(t *testing.T, s *Store, age time.Duration, mut func(*Run)) Run {

@@ -9,12 +9,13 @@ import (
 	"text/tabwriter"
 	"time"
 
-	"github.com/sasha/pktreplay/internal/conv"
-	"github.com/sasha/pktreplay/internal/filter"
-	"github.com/sasha/pktreplay/internal/pcapio"
-	"github.com/sasha/pktreplay/internal/stats"
+	"github.com/AlexRudyak/pktreplay/internal/conv"
+	"github.com/AlexRudyak/pktreplay/internal/filter"
+	"github.com/AlexRudyak/pktreplay/internal/pcapio"
+	"github.com/AlexRudyak/pktreplay/internal/stats"
 )
 
+// cmdConversations implements "pktreplay conversations".
 func cmdConversations(args []string) error {
 	fs := flag.NewFlagSet("conversations", flag.ExitOnError)
 	var rf rangeFlags

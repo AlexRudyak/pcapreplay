@@ -50,6 +50,7 @@ func recoverCrash() {
 	}
 }
 
+// main dispatches to the sub-command; with no arguments from Explorer it opens the GUI.
 func main() {
 	initLogging()
 	defer recoverCrash()

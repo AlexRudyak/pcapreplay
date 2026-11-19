@@ -3,7 +3,7 @@ package record
 import (
 	"time"
 
-	"github.com/sasha/pktreplay/internal/backend"
+	"github.com/AlexRudyak/pktreplay/internal/backend"
 )
 
 // Recorder wraps a Backend and writes everything that crosses it to one or more

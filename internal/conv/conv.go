@@ -13,7 +13,7 @@ import (
 	"sort"
 	"strings"
 
-	"github.com/sasha/pktreplay/internal/decode"
+	"github.com/AlexRudyak/pktreplay/internal/decode"
 )
 
 // DefaultMaxConversations bounds the flow table (~300 B per entry).
@@ -89,6 +89,7 @@ func ProtoName(p uint8) string {
 	return fmt.Sprint(p)
 }
 
+// protoNumber maps a protocol name used in selectors (tcp, udp, icmp, ...) to its IP protocol number.
 func protoNumber(s string) (uint8, bool) {
 	switch strings.ToLower(s) {
 	case "tcp":
@@ -122,6 +123,7 @@ func Selector(proto uint8, client, server netip.AddrPort) string {
 	return ProtoName(proto) + "/" + fmtEndpoint(proto, client) + "/" + fmtEndpoint(proto, server)
 }
 
+// parseEndpoint parses "ip:port" (or "[v6]:port"); protocols without ports take a bare address.
 func parseEndpoint(proto uint8, s string) (netip.AddrPort, error) {
 	if hasPorts(proto) {
 		ap, err := netip.ParseAddrPort(s)
@@ -282,6 +284,8 @@ func (t *Table) Add(in *decode.Info, wireLen int, ts int64) {
 	}
 }
 
+// newConversation starts tracking a conversation whose first packet is in, guessing the
+// client from the TCP flags or the port numbers (a later SYN can correct the guess).
 func newConversation(idx int, k Key, in *decode.Info, ts int64) *Conversation {
 	c := &Conversation{Index: idx, Key: k, Proto: in.Proto,
 		Client: netip.AddrPortFrom(in.Src, portOf(in, true)), Server: netip.AddrPortFrom(in.Dst, portOf(in, false)), FirstTs: ts}

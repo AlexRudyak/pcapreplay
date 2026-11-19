@@ -12,9 +12,9 @@ import (
 	"strings"
 	"sync"
 
-	"github.com/sasha/pktreplay/internal/checksum"
-	"github.com/sasha/pktreplay/internal/decode"
-	"github.com/sasha/pktreplay/internal/pcapio"
+	"github.com/AlexRudyak/pktreplay/internal/checksum"
+	"github.com/AlexRudyak/pktreplay/internal/decode"
+	"github.com/AlexRudyak/pktreplay/internal/pcapio"
 )
 
 // MaxFrame bounds frame size after payload rewriting.
@@ -228,6 +228,8 @@ func (b *Buf) ReplacePayload(p []byte) error {
 	return nil
 }
 
+// substitute replaces every occurrence of s.Old in the payload with s.New, resizing the
+// payload and the length fields as needed.
 func (b *Buf) substitute(s Subst) error {
 	in := &b.In
 	pay := b.B[in.PayOff:]

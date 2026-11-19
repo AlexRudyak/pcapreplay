@@ -26,8 +26,8 @@ import (
 	"strings"
 	"time"
 
-	"github.com/sasha/pktreplay/internal/filter"
-	"github.com/sasha/pktreplay/internal/history"
+	"github.com/AlexRudyak/pktreplay/internal/filter"
+	"github.com/AlexRudyak/pktreplay/internal/history"
 )
 
 //go:embed web/*
@@ -134,6 +134,9 @@ func (s *Server) Handler() http.Handler {
 	return s.guard(mux)
 }
 
+// guard wraps every request in the security checks: Host allow-list (DNS-rebinding defence),
+// the token-to-cookie exchange, cookie validation, and for state-changing methods the
+// Origin and JSON content-type checks. It also sets the security headers.
 func (s *Server) guard(next http.Handler) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if !s.hosts[r.Host] {
@@ -189,6 +192,7 @@ func fail(w http.ResponseWriter, code int, err error) {
 	writeJSON(w, code, map[string]string{"error": err.Error()})
 }
 
+// decodeBody reads a JSON request body into v, answering 400 itself on failure.
 func decodeBody(w http.ResponseWriter, r *http.Request, v any) bool {
 	if r.Method != http.MethodPost {
 		fail(w, http.StatusMethodNotAllowed, errors.New("POST required"))
@@ -343,6 +347,7 @@ func (s *Server) browse(w http.ResponseWriter, r *http.Request) {
 	writeJSON(w, 200, map[string]any{"path": p, "parent": parent, "entries": out})
 }
 
+// checkFilter answers POST /api/filter/check: whether a filter expression parses.
 func (s *Server) checkFilter(w http.ResponseWriter, r *http.Request) {
 	var req struct {
 		Filter string `json:"filter"`
@@ -357,6 +362,7 @@ func (s *Server) checkFilter(w http.ResponseWriter, r *http.Request) {
 	writeJSON(w, 200, map[string]any{"ok": true})
 }
 
+// startStats answers POST /api/stats: starts the analysis job for a capture.
 func (s *Server) startStats(w http.ResponseWriter, r *http.Request) {
 	var req struct {
 		RangeRequest
@@ -379,6 +385,7 @@ func (s *Server) startStats(w http.ResponseWriter, r *http.Request) {
 	writeJSON(w, 202, map[string]string{"state": "running"})
 }
 
+// startReplay answers POST /api/replay: validates the request and starts the replay job.
 func (s *Server) startReplay(w http.ResponseWriter, r *http.Request) {
 	var req ReplayRequest
 	if !decodeBody(w, r, &req) {

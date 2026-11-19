@@ -59,11 +59,14 @@ type Windows struct {
 // NewWindows returns an unopened WinDivert backend.
 func NewWindows() *Windows { return &Windows{} }
 
+// Name implements Backend.
 func (w *Windows) Name() string { return "windows-windivert" }
 
 // RSTsDropped reports how many outbound RSTs of the guarded flow were swallowed.
 func (w *Windows) RSTsDropped() uint64 { return w.rstDrops.Load() }
 
+// Open loads WinDivert.dll and opens the network-layer send handle. It reports a readable
+// error when the DLL or driver is missing or the process is not elevated.
 func (w *Windows) Open(o Options) error {
 	w.opts = o
 	if o.Target.IsLoopback() {
@@ -100,6 +103,7 @@ func (w *Windows) Open(o Options) error {
 
 func fileExists(p string) bool { _, err := os.Stat(p); return err == nil }
 
+// open opens one WinDivert handle with the given filter and flags.
 func (w *Windows) open(filter string, flags uint64) (uintptr, error) {
 	fp, err := syscall.BytePtrFromString(filter)
 	if err != nil {
@@ -188,6 +192,7 @@ func (w *Windows) Guard(f Flow) (func() error, error) {
 	}, nil
 }
 
+// readLoop receives diverted packets from h and queues them on rx until the handle closes.
 func (w *Windows) readLoop(h uintptr, rx chan<- []byte) {
 	defer close(rx)
 	buf := make([]byte, 65535+64)
@@ -215,6 +220,7 @@ func (w *Windows) readLoop(h uintptr, rx chan<- []byte) {
 	}
 }
 
+// Recv returns the next diverted inbound packet of the guarded flow, or ErrTimeout.
 func (w *Windows) Recv(buf []byte, timeout time.Duration) (int, error) {
 	w.mu.Lock()
 	rx := w.rx
@@ -235,6 +241,7 @@ func (w *Windows) Recv(buf []byte, timeout time.Duration) (int, error) {
 	}
 }
 
+// Close closes every WinDivert handle that is still open.
 func (w *Windows) Close() error {
 	w.mu.Lock()
 	defer w.mu.Unlock()

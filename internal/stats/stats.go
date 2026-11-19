@@ -7,8 +7,8 @@ import (
 	"sort"
 	"time"
 
-	"github.com/sasha/pktreplay/internal/conv"
-	"github.com/sasha/pktreplay/internal/decode"
+	"github.com/AlexRudyak/pktreplay/internal/conv"
+	"github.com/AlexRudyak/pktreplay/internal/decode"
 )
 
 // TalkerCapacity bounds the number of distinct IPs tracked for "top talkers".

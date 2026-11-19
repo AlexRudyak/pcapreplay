@@ -52,6 +52,7 @@ const (
 	FormatPCAPNG
 )
 
+// String returns "pcap" or "pcapng".
 func (f Format) String() string {
 	if f == FormatPCAPNG {
 		return "pcapng"
@@ -183,6 +184,7 @@ func (r *Reader) readFull(p []byte) error {
 	return err
 }
 
+// readFileHeader detects the format and byte order from the first bytes and parses the file header.
 func (r *Reader) readFileHeader() error {
 	var magic [4]byte
 	if err := r.readFull(magic[:]); err != nil {
@@ -305,6 +307,7 @@ func (r *Reader) grow(n int) {
 	}
 }
 
+// readIDB parses a PCAPNG Interface Description Block: link type, snap length and timestamp resolution.
 func (r *Reader) readIDB() error {
 	body, err := r.readBlockBody()
 	if err != nil || len(body) < 8 {
@@ -352,6 +355,7 @@ func (r *Reader) Next() (*Packet, error) {
 	return r.nextPCAPNG()
 }
 
+// nextPCAP reads one classic PCAP record into the reused buffer.
 func (r *Reader) nextPCAP() (*Packet, error) {
 	start := r.pos
 	if err := r.readFull(r.hdr[:16]); err != nil {
@@ -377,6 +381,8 @@ func (r *Reader) nextPCAP() (*Packet, error) {
 	return &r.pkt, nil
 }
 
+// nextPCAPNG returns the next packet block of a PCAPNG file, absorbing interface and
+// other blocks on the way and extracting the direction from epb_flags.
 func (r *Reader) nextPCAPNG() (*Packet, error) {
 	for {
 		start := r.pos

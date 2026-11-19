@@ -6,7 +6,7 @@ import (
 	"os"
 	"path/filepath"
 
-	"github.com/sasha/pktreplay/internal/history"
+	"github.com/AlexRudyak/pktreplay/internal/history"
 )
 
 func (s *Server) libraryRoutes(mux *http.ServeMux) {
@@ -35,6 +35,7 @@ func (s *Server) libEntryOf(p history.Pcap) libEntry {
 	return e
 }
 
+// needPcap loads the library entry named in the URL, writing the 404/400 response itself when it is missing or the id is invalid.
 func (s *Server) needPcap(w http.ResponseWriter, r *http.Request) (history.Pcap, bool) {
 	if !s.needHistory(w) {
 		return history.Pcap{}, false
@@ -62,6 +63,7 @@ func (s *Server) libList(w http.ResponseWriter, r *http.Request) {
 	writeJSON(w, 200, map[string]any{"enabled": true, "pcaps": out, "stats": s.hist.Stats(), "settings": s.hist.Settings()})
 }
 
+// libGet answers GET /api/library/{id}: the entry, its source paths and the runs that used it.
 func (s *Server) libGet(w http.ResponseWriter, r *http.Request) {
 	p, ok := s.needPcap(w, r)
 	if !ok {
@@ -111,6 +113,7 @@ func (s *Server) libAdd(w http.ResponseWriter, r *http.Request) {
 	writeJSON(w, 200, map[string]any{"pcap": s.libEntryOf(p)})
 }
 
+// libUpdate applies a note and/or pinned change to a library entry.
 func (s *Server) libUpdate(w http.ResponseWriter, r *http.Request) {
 	p, ok := s.needPcap(w, r)
 	if !ok {
@@ -142,6 +145,7 @@ func (s *Server) libUpdate(w http.ResponseWriter, r *http.Request) {
 	writeJSON(w, 200, map[string]any{"pcap": s.libEntryOf(up)})
 }
 
+// libDelete removes a library entry and its stored copy; the runs that used it stay in the history.
 func (s *Server) libDelete(w http.ResponseWriter, r *http.Request) {
 	p, ok := s.needPcap(w, r)
 	if !ok {
@@ -158,6 +162,7 @@ func (s *Server) libDelete(w http.ResponseWriter, r *http.Request) {
 	writeJSON(w, 200, map[string]bool{"deleted": true})
 }
 
+// libRemoveCopy deletes only the stored copy, keeping the entry as "removed".
 func (s *Server) libRemoveCopy(w http.ResponseWriter, r *http.Request) {
 	p, ok := s.needPcap(w, r)
 	if !ok {
@@ -175,6 +180,7 @@ func (s *Server) libRemoveCopy(w http.ResponseWriter, r *http.Request) {
 	writeJSON(w, 200, map[string]any{"pcap": s.libEntryOf(up)})
 }
 
+// libDownload sends the stored copy of a capture as a file download.
 func (s *Server) libDownload(w http.ResponseWriter, r *http.Request) {
 	p, ok := s.needPcap(w, r)
 	if !ok {

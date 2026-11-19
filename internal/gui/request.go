@@ -9,14 +9,14 @@ import (
 	"strings"
 	"time"
 
-	"github.com/sasha/pktreplay/internal/backend"
-	"github.com/sasha/pktreplay/internal/conv"
-	"github.com/sasha/pktreplay/internal/filter"
-	"github.com/sasha/pktreplay/internal/mutate"
-	"github.com/sasha/pktreplay/internal/pace"
-	"github.com/sasha/pktreplay/internal/pcapio"
-	"github.com/sasha/pktreplay/internal/record"
-	"github.com/sasha/pktreplay/internal/replay"
+	"github.com/AlexRudyak/pktreplay/internal/backend"
+	"github.com/AlexRudyak/pktreplay/internal/conv"
+	"github.com/AlexRudyak/pktreplay/internal/filter"
+	"github.com/AlexRudyak/pktreplay/internal/mutate"
+	"github.com/AlexRudyak/pktreplay/internal/pace"
+	"github.com/AlexRudyak/pktreplay/internal/pcapio"
+	"github.com/AlexRudyak/pktreplay/internal/record"
+	"github.com/AlexRudyak/pktreplay/internal/replay"
 )
 
 // RangeRequest selects a slice of a capture.
@@ -81,6 +81,7 @@ type ConvRuleRequest struct {
 	Replace    []string `json:"replace"`
 }
 
+// rule converts the JSON form of a per-conversation edit into a conv.Rule, validating addresses and ports.
 func (c *ConvRuleRequest) rule() (conv.Rule, error) {
 	k, client, err := conv.ParseSelector(c.Selector)
 	if err != nil {
@@ -135,6 +136,7 @@ func addr(name, s string) (netip.Addr, error) {
 	return a.Unmap(), nil
 }
 
+// mac parses an optional MAC address field; an empty string means "not set".
 func mac(name, s string) (*[6]byte, error) {
 	s = strings.TrimSpace(s)
 	if s == "" {

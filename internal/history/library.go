@@ -279,6 +279,7 @@ func refID(src PcapSource) string {
 	return hex.EncodeToString(sum[:])
 }
 
+// addReference records a capture as a reference entry (no stored copy) with the given state.
 func (s *Store) addReference(src PcapSource, state string, now time.Time) (Pcap, error) {
 	s.mu.Lock()
 	defer s.mu.Unlock()

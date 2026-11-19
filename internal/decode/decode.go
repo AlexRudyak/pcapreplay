@@ -7,7 +7,7 @@ import (
 	"encoding/binary"
 	"net/netip"
 
-	"github.com/sasha/pktreplay/internal/pcapio"
+	"github.com/AlexRudyak/pktreplay/internal/pcapio"
 )
 
 // IP protocol numbers and EtherTypes used by the engine.
@@ -140,6 +140,7 @@ func Decode(link uint32, frame []byte, info *Info) bool {
 	return false
 }
 
+// decodeV4 decodes an IPv4 header at off, handling options and fragments.
 func decodeV4(f []byte, off int, in *Info) bool {
 	if len(f) < off+20 || f[off]>>4 != 4 {
 		return false
@@ -167,6 +168,7 @@ func decodeV4(f []byte, off int, in *Info) bool {
 	return true
 }
 
+// decodeV6 decodes an IPv6 header at off, walking the extension-header chain to the transport header.
 func decodeV6(f []byte, off int, in *Info) bool {
 	if len(f) < off+40 || f[off]>>4 != 6 {
 		return false
@@ -211,6 +213,8 @@ func decodeV6(f []byte, off int, in *Info) bool {
 	return true
 }
 
+// decodeL4 records the ports, TCP flags/sequence numbers and payload bounds of the transport
+// header at l4 (end is the end of the IP payload).
 func decodeL4(f []byte, l4, end int, in *Info) {
 	if l4 > len(f) {
 		return

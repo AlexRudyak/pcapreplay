@@ -8,11 +8,11 @@ import (
 	"sync"
 	"time"
 
-	"github.com/sasha/pktreplay/internal/filter"
-	"github.com/sasha/pktreplay/internal/history"
-	"github.com/sasha/pktreplay/internal/record"
-	"github.com/sasha/pktreplay/internal/replay"
-	"github.com/sasha/pktreplay/internal/stats"
+	"github.com/AlexRudyak/pktreplay/internal/filter"
+	"github.com/AlexRudyak/pktreplay/internal/history"
+	"github.com/AlexRudyak/pktreplay/internal/record"
+	"github.com/AlexRudyak/pktreplay/internal/replay"
+	"github.com/AlexRudyak/pktreplay/internal/stats"
 )
 
 const maxLog = 400
@@ -132,6 +132,7 @@ func (m *manager) begin(kind string) (context.Context, error) {
 	return ctx, nil
 }
 
+// finish records the outcome of the current job: done, failed or cancelled.
 func (m *manager) finish(err error) {
 	m.mu.Lock()
 	defer m.mu.Unlock()
