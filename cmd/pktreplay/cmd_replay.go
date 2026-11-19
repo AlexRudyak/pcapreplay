@@ -15,6 +15,7 @@ import (
 	"github.com/sasha/pktreplay/internal/backend"
 	"github.com/sasha/pktreplay/internal/conv"
 	"github.com/sasha/pktreplay/internal/filter"
+	"github.com/sasha/pktreplay/internal/logx"
 	"github.com/sasha/pktreplay/internal/mutate"
 	"github.com/sasha/pktreplay/internal/pace"
 	"github.com/sasha/pktreplay/internal/pcapio"
@@ -131,7 +132,8 @@ Flags:
 	recordRx := fs.Bool("record-rx", true, "with -record, also record replies received from the target (TCP mode)")
 	queue := fs.Int("queue", 4096, "producer/consumer queue depth")
 	batch := fs.Int("batch", 64, "max packets per send batch in burst mode")
-	verbose := fs.Bool("v", false, "verbose protocol trace")
+	var lf logFlags
+	lf.register(fs)
 	fs.Parse(args)
 
 	if fs.NArg() != 1 {
@@ -154,8 +156,14 @@ Flags:
 		return err
 	}
 
+	lg, closeLog, err := lf.build()
+	if err != nil {
+		return err
+	}
+	defer closeLog()
+	rf.log = lg
 	cfg := replay.Config{Capture: fs.Arg(0), Filter: flt, Loop: *loop, Count: rf.count,
-		QueueSize: *queue, Batch: *batch}
+		QueueSize: *queue, Batch: *batch, Log: lg}
 	cfg.Position = func(r *pcapio.Reader) error { return rf.position(r, cfg.Capture) }
 
 	var errs []error
@@ -241,8 +249,11 @@ Flags:
 	cfg.Opts.Iface, cfg.Opts.IfIndex, cfg.Opts.NoFirewall = *iface, uint32(*ifIndex), *noFW
 	cfg.TCP = replay.TCPConfig{SeqOffset: *seqOff, SkipBytes: *skipBytes, AckMode: *ackMode,
 		HandshakeTimeout: *hsTimeout}
-	if *verbose {
-		cfg.TCP.Trace = func(f string, a ...any) { fmt.Fprintf(os.Stderr, "[tcp] "+f+"\n", a...) }
+	if lg.Enabled(logx.Info) {
+		cfg.TCP.Trace = func(f string, a ...any) { lg.Infof("tcp", f, a...) }
+	}
+	if lg.Enabled(logx.Debug) {
+		cfg.TCP.Debug = func(f string, a ...any) { lg.Debugf("tcp", f, a...) }
 	}
 	if transport == replay.UDP && (*seqOff != 0 || *skipBytes != 0) {
 		return errors.New("-tcp-seq-offset / -tcp-skip-bytes only apply to -mode tcp")
@@ -251,6 +262,29 @@ Flags:
 	ctx, stop := signal.NotifyContext(context.Background(), os.Interrupt)
 	defer stop()
 	fmt.Fprintf(os.Stderr, "mode=%s backend=%s capture=%s\n", transport, cfg.Backend.Name(), cfg.Capture)
+	if lg.Enabled(logx.Info) {
+		lg.Infof("replay", "filter=%q rewrite: %s", *expr, describeGlobalRewrite(&cfg))
+		for _, c := range convRules {
+			lg.Infof("replay", "conversation rule: %s", c)
+		}
+		cfg.Progress = &replay.Counters{}
+		stopProg := make(chan struct{})
+		defer close(stopProg)
+		go func() {
+			t := time.NewTicker(2 * time.Second)
+			defer t.Stop()
+			for {
+				select {
+				case <-stopProg:
+					return
+				case <-t.C:
+					c := cfg.Progress
+					lg.Infof("progress", "read %d, matched %d, sent %d pkts / %d bytes, skipped %d, send errors %d",
+						c.Read.Load(), c.Matched.Load(), c.Sent.Load(), c.Bytes.Load(), c.Skipped.Load(), c.SendErrs.Load())
+				}
+			}
+		}()
+	}
 
 	var res *replay.Result
 	if transport == replay.TCP {
@@ -272,4 +306,33 @@ Flags:
 		fmt.Printf("recorded %d packets (%d bytes) to %s\n", n, b, rec.Writer().Path())
 	}
 	return err
+}
+
+// describeGlobalRewrite summarises the rewrite applied to conversations without a -conv rule.
+func describeGlobalRewrite(cfg *replay.Config) string {
+	rw := cfg.Rewrite
+	s := ""
+	add := func(f string, a ...any) { s += fmt.Sprintf(f, a...) + " " }
+	if rw.SrcIP.IsValid() {
+		add("src-ip=%s", rw.SrcIP)
+	}
+	if rw.SrcPort != 0 {
+		add("src-port=%d", rw.SrcPort)
+	}
+	if rw.DstIP.IsValid() {
+		add("dst-ip=%s", rw.DstIP)
+	}
+	if rw.DstPort != 0 {
+		add("dst-port=%d", rw.DstPort)
+	}
+	if rw.SetPayload != nil {
+		add("payload=%d bytes", len(rw.SetPayload))
+	}
+	if len(rw.Replace) > 0 {
+		add("replace x%d", len(rw.Replace))
+	}
+	if s == "" {
+		return "none (packets are sent as captured)"
+	}
+	return s
 }

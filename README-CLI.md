@@ -17,12 +17,12 @@ pktreplay <command> [flags] <capture>
 
 Run `pktreplay <command> -h` for the built-in flag list. Flags may be written `-flag value` or `-flag=value`
 (Go syntax; `--flag` also works). **Flags must come before the capture file name.** Boolean flags
-(`-burst`, `-v`, ...) need no value; write `-record-rx=false` to turn a default-on boolean off.
+(`-burst`, `-vv`, ...) need no value; write `-record-rx=false` to turn a default-on boolean off.
 
 Exit codes: `0` success, `1` the command failed (message on stderr), `2` bad usage, `3` internal crash.
 
 Contents: [Capture files](#capture-files) | [Filters](#filter-expressions) | [stats](#stats) |
-[conversations](#conversations) | [index](#index) | [replay](#replay) | [gui](#gui) | [Recipes](#recipes) |
+[conversations](#conversations) | [index](#index) | [replay](#replay) | [gui](#gui) | [Logging](#logging-and-verbosity) | [Recipes](#recipes) |
 [Troubleshooting](#troubleshooting)
 
 ---
@@ -322,7 +322,7 @@ the tool prints how many packets and bytes were written.
 |---|---|---|
 | `-queue N` | 4096 | Depth of the reader-to-sender queue. Larger absorbs disk hiccups; memory use grows by N packets. |
 | `-batch N` | 64 | Maximum packets handed to the kernel in one call in `-burst` mode (`sendmmsg` / WinDivertSendEx). |
-| `-v` | off | Verbose TCP trace on stderr (`[tcp] ...`): handshake, retransmits, window stalls, close. |
+| `-v` `-vv` `-vvv` `-log-level` `-log-file` | quiet | Diagnostic logging, see [Logging](#logging-and-verbosity). |
 
 ### Reading the result
 
@@ -358,6 +358,38 @@ Run with no flags, a second launch for the same user reopens the already-running
 another process (a record of the running instance is kept in `gui-instance.json` next to the history folder).
 `pktreplay-gui.exe` (the windowless Windows build) is the same program and opens the GUI when started without
 arguments; its log is `%LOCALAPPDATA%\pktreplay\pktreplay-gui.log`.
+
+---
+
+## Logging and verbosity
+
+`stats`, `conversations`, `index` and `replay` accept the same diagnostics flags. By default only the normal
+command output is printed. Diagnostics go to **stderr** (so they never mix with results on stdout), one line each:
+
+```
+12:43:42.918 DEBUG replay: new conversation at pkt 2: UDP 192.168.1.50:40000 > 192.168.1.1:53; rewrite dst-ip=10.50.0.9
+```
+
+(time, level, component, message).
+
+| Flag | Level | Meaning |
+|---|---|---|
+| *(none)* | quiet | No diagnostics. |
+| `-v` | info | **What is being done:** settings in effect, filter and rewrite summary, conversation rules, the flow chosen for TCP, route/target, backend opened, firewall/RST guard installed and released, index used or built, pass start (`-loop`), TCP protocol milestones (SYN, SYN-ACK and RTT, established, RST/FIN, retransmits, stream anchoring), failed send batches, a progress line every 2 s during `replay`, and timings. |
+| `-vv` | debug | Everything above, plus **why:** the first packet of every conversation with the rewrite that will apply to it, every send batch (size, bytes, queue depth), and per-segment TCP detail (each segment sent with its live seq/ack and each ACK received with window and segments in flight). |
+| `-vvv` | trace | Everything above, plus **one line for every packet read**: its number, addressing, and the decision (queued with before/after sizes and rewrite, rejected by the filter, skipped because of protocol, flow or missing `-conv` rule). Extremely verbose and slow on large captures; combine with `-start`/`-count` or a filter. `stats` traces every packet as counted or filtered out. |
+| `-log-level LEVEL` | | The same as the shortcuts: `quiet`, `info`, `debug` or `trace` (also `0`-`3`). If both are given the higher level wins. |
+| `-log-file FILE` | | Also append the diagnostic lines to FILE (still shown on stderr). Handy for sharing a trace. |
+
+```bash
+pktreplay replay -mode udp -backend null -v capture.pcap                  # what will happen
+pktreplay replay -mode tcp -dst-ip 10.20.0.5 -vv capture.pcap             # TCP handshake and per-segment detail
+pktreplay replay -mode udp -backend null -vvv -count 20 capture.pcap      # decision for each of the first packets
+pktreplay stats -log-level debug -log-file stats.log huge.pcap            # keep a log file
+```
+
+Logging costs nothing when off, and the per-packet levels are checked once outside the packet loop, so quiet
+runs keep their full speed. The old `-v` of `replay` (TCP trace) is now part of `-v`; `-vv` adds the finer detail.
 
 ---
 
@@ -410,7 +442,7 @@ sudo pktreplay replay -mode tcp -dst-ip 10.20.0.5 -record sent.pcapng capture.pc
 | `no TCP packet in the capture matches the filter` / `no UDP ...` | Nothing selected; loosen `-filter`/`-conv`, or you are in the wrong `-mode`. |
 | `-tcp-seq-offset / -tcp-skip-bytes only apply to -mode tcp` | Remove those flags for UDP. |
 | `-only-conv needs at least one -conv rule` | Add a `-conv`. |
-| `tcp handshake timed out: no SYN-ACK from server` | Target unreachable, wrong IP/port, a firewall dropping the SYN, or (Linux) wrong `-iface`. Try `-handshake-timeout 15s -v`. |
+| `tcp handshake timed out: no SYN-ACK from server` | Target unreachable, wrong IP/port, a firewall dropping the SYN, or (Linux) wrong `-iface`. Try `-handshake-timeout 15s -vv`. |
 | `connection refused by server (RST in reply to SYN)` | Nothing listens on that port. |
 | `server stopped acknowledging data` | The server stopped ACKing (window closed or it hung). Check the server; try `-tcp-skip-bytes` or a slower pacing. |
 | Windows: access denied / driver not found | Run elevated and make sure `WinDivert.dll` and `WinDivert64.sys` sit next to `pktreplay.exe`. Antivirus products sometimes block WinDivert. |

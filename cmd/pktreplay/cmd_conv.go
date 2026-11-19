@@ -19,6 +19,8 @@ func cmdConversations(args []string) error {
 	fs := flag.NewFlagSet("conversations", flag.ExitOnError)
 	var rf rangeFlags
 	rf.register(fs)
+	var lf logFlags
+	lf.register(fs)
 	expr := fs.String("filter", "", "only count packets matching this filter expression")
 	top := fs.Int("top", 50, "number of conversations to list (0 = all tracked)")
 	sortBy := fs.String("sort", conv.ByBytes, "sort order: bytes, packets or time (first appearance)")
@@ -49,6 +51,14 @@ Flags:
 		return err
 	}
 	path := fs.Arg(0)
+	lg, closeLog, err := lf.build()
+	if err != nil {
+		return err
+	}
+	defer closeLog()
+	rf.log = lg
+	lg.Infof("conversations", "analysing %s: filter=%q start=%d count=%d sort=%s top=%d", path, *expr, rf.start, rf.count, *sortBy, *top)
+	begin := time.Now()
 	st, rd, err := stats.ScanWith(context.Background(), path, flt,
 		func(r *pcapio.Reader) error { return rf.position(r, path) }, rf.count, nil, true)
 	if rd != nil {
@@ -57,6 +67,8 @@ Flags:
 	if err != nil {
 		return err
 	}
+	lg.Infof("conversations", "scan finished in %s: %d conversations tracked, %d packets in untracked conversations",
+		time.Since(begin).Round(time.Millisecond), st.Convs.Len(), st.Convs.Untracked)
 	rows := st.ConvRows(*top, *sortBy)
 	tw := tabwriter.NewWriter(os.Stdout, 0, 4, 2, ' ', 0)
 	fmt.Fprintln(tw, "#\tSELECTOR (proto/client/server)\tPKTS\tC>S\tS>C\tBYTES\tDURATION\tSTATE")

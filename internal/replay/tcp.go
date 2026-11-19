@@ -51,6 +51,8 @@ type TCPConfig struct {
 	AckMode string
 	// Trace, if non-nil, receives one line per significant protocol event.
 	Trace func(format string, args ...any)
+	// Debug, if non-nil, receives finer detail: every segment sent and every ACK.
+	Debug func(format string, args ...any)
 }
 
 // FlowKey is the captured 4-tuple selected for replay (client -> server).
@@ -158,10 +160,14 @@ func RunTCP(ctx context.Context, cfg Config) (*Result, error) {
 	if err := cfg.prepare(); err != nil {
 		return nil, err
 	}
+	cfg.Log.Infof("replay", "tcp: ack-mode=%s skip-bytes=%d seq-offset=%d handshake-timeout=%s pacing=%s",
+		tc.AckMode, tc.SkipBytes, tc.SeqOffset, tc.HandshakeTimeout, describePace(cfg.Pace))
 	key, err := ProbeFlow(&cfg)
 	if err != nil {
 		return nil, err
 	}
+	cfg.Log.Infof("replay", "selected flow: %s:%d > %s:%d (first packet passing the filter decides the client)",
+		key.Client, key.ClientPort, key.Server, key.ServerPort)
 	// A conversation rule defines the live endpoints and payload substitutions
 	// of the replayed conversation (and supersedes the global rewrite for it).
 	if rule := cfg.convSet.ForKey(conv.MakeKey(decode.ProtoTCP,
@@ -181,6 +187,7 @@ func RunTCP(ctx context.Context, cfg Config) (*Result, error) {
 	if err := cfg.Backend.Open(cfg.Opts); err != nil {
 		return nil, err
 	}
+	cfg.Log.Infof("backend", "opened %s towards %s:%d", cfg.Backend.Name(), target, remotePort)
 	defer cfg.Backend.Close()
 
 	live := backend.Flow{LocalIP: cfg.Rewrite.SrcIP, RemoteIP: target, LocalPort: cfg.Rewrite.SrcPort, RemotePort: remotePort}
@@ -195,11 +202,15 @@ func RunTCP(ctx context.Context, cfg Config) (*Result, error) {
 		live.LocalPort = 49152 + binary.BigEndian.Uint16(r[:])%16000
 	}
 
+	cfg.Log.Infof("backend", "live connection %s:%d > %s:%d; installing the RST guard", live.LocalIP, live.LocalPort, live.RemoteIP, live.RemotePort)
 	release, err := cfg.Backend.Guard(live)
 	if err != nil {
 		return nil, err
 	}
-	defer release()
+	defer func() {
+		release()
+		cfg.Log.Infof("backend", "RST guard released")
+	}()
 
 	cnt := cfg.counters()
 	stats := &TCPStats{Flow: key, Live: live}
@@ -302,6 +313,12 @@ func newSession(ctx context.Context, cfg *Config, live backend.Flow, st *TCPStat
 func (s *tcpSession) trace(f string, a ...any) {
 	if s.tc.Trace != nil {
 		s.tc.Trace(f, a...)
+	}
+}
+
+func (s *tcpSession) debug(f string, a ...any) {
+	if s.tc.Debug != nil {
+		s.tc.Debug(f, a...)
 	}
 }
 
@@ -472,6 +489,7 @@ func (s *tcpSession) handle(b *mutate.Buf) (bool, error) {
 		s.peerWnd = uint32(in.Window)
 		switch {
 		case seqLT(s.sndUna, in.Ack) && seqLE(in.Ack, s.sndNxt):
+			s.debug("ACK %d (+%d bytes) win=%d, %d segments in flight", in.Ack, in.Ack-s.sndUna, in.Window, len(s.segs))
 			s.sndUna, s.dupAcks, s.rto, progress = in.Ack, 0, 300*time.Millisecond, true
 			s.popAcked()
 		case in.Ack == s.sndUna && in.PayEnd == in.PayOff && in.Flags&decode.FIN == 0 && len(s.segs) > 0:
@@ -672,6 +690,7 @@ func (s *tcpSession) replayOne(it item, pc *pace.Pacer, cnt *Counters, local, us
 	}
 	cnt.Sent.Add(1)
 	cnt.Bytes.Add(uint64(len(b.IPPacket())))
+	s.debug("send seq=%d len=%d ack=%d (rewrite changed payload by %d bytes)", seq, newLen, ack, newLen-pay)
 	if seqLT(s.sndNxt, end) {
 		s.sndNxt = end
 	}

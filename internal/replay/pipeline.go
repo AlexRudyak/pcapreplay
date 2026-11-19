@@ -10,6 +10,7 @@ import (
 	"errors"
 	"fmt"
 	"io"
+	"net/netip"
 	"sync/atomic"
 	"time"
 
@@ -17,6 +18,7 @@ import (
 	"github.com/sasha/pktreplay/internal/conv"
 	"github.com/sasha/pktreplay/internal/decode"
 	"github.com/sasha/pktreplay/internal/filter"
+	"github.com/sasha/pktreplay/internal/logx"
 	"github.com/sasha/pktreplay/internal/mutate"
 	"github.com/sasha/pktreplay/internal/pace"
 	"github.com/sasha/pktreplay/internal/pcapio"
@@ -64,6 +66,9 @@ type Config struct {
 	// mode (which replays a single conversation) it is implied by having rules.
 	OnlyConversations bool
 	convSet           *conv.Set
+
+	// Log receives diagnostics at info/debug/trace level; nil logs nothing.
+	Log *logx.Logger
 
 	// TCP mode.
 	TCP TCPConfig
@@ -174,10 +179,17 @@ func feed(ctx context.Context, cfg *Config, o feedOpts, cnt *Counters, out chan<
 	}
 	defer rd.Close()
 
+	lg := cfg.Log
+	traceOn, debugOn := lg.Enabled(logx.Trace), lg.Enabled(logx.Debug)
+	var seenConv map[conv.Key]struct{} // debug: first packet of each conversation (bounded)
+	if debugOn {
+		seenConv = make(map[conv.Key]struct{})
+	}
 	var in decode.Info
 	var loopShift, firstTs, lastTs int64
 	var matched uint64
 	for pass := 0; pass < cfg.Loop; pass++ {
+		lg.Infof("replay", "pass %d/%d: reading %s", pass+1, cfg.Loop, cfg.Capture)
 		if pass > 0 {
 			if err := rd.SeekOffset(0, 0); err != nil {
 				return fmt.Errorf("loop: %w", err)
@@ -202,9 +214,16 @@ func feed(ctx context.Context, cfg *Config, o feedOpts, cnt *Counters, out chan<
 			if !decode.Decode(p.LinkType, p.Data, &in) || !in.HasIP || in.Proto != o.proto || !in.HasPorts ||
 				(o.accept != nil && !o.accept(&in)) {
 				cnt.Skipped.Add(1)
+				if traceOn {
+					lg.Tracef("replay", "pkt %d len=%d skipped: not a %s packet of the selected flow (%s)", rd.Count()-1, len(p.Data),
+						protoName(o.proto), describePkt(&in))
+				}
 				continue
 			}
 			if !cfg.Filter.MatchAll() && !cfg.Filter.Match(p.Data, &in) {
+				if traceOn {
+					lg.Tracef("replay", "pkt %d len=%d %s: rejected by the filter", rd.Count()-1, len(p.Data), describePkt(&in))
+				}
 				continue
 			}
 			var rw *mutate.Rewrite
@@ -212,7 +231,17 @@ func feed(ctx context.Context, cfg *Config, o feedOpts, cnt *Counters, out chan<
 				var ok bool
 				if rw, ok = o.pick(&in); !ok {
 					cnt.Skipped.Add(1) // conversation not selected for replay
+					if traceOn {
+						lg.Tracef("replay", "pkt %d len=%d %s: skipped, conversation has no -conv rule", rd.Count()-1, len(p.Data), describePkt(&in))
+					}
 					continue
+				}
+			}
+			if debugOn && len(seenConv) < 4096 {
+				k := conv.MakeKey(in.Proto, netip.AddrPortFrom(in.Src, in.SrcPort), netip.AddrPortFrom(in.Dst, in.DstPort))
+				if _, dup := seenConv[k]; !dup {
+					seenConv[k] = struct{}{}
+					lg.Debugf("replay", "new conversation at pkt %d: %s; %s", rd.Count()-1, describePkt(&in), describeRewrite(rw))
 				}
 			}
 			b := mutate.Get()
@@ -236,6 +265,10 @@ func feed(ctx context.Context, cfg *Config, o feedOpts, cnt *Counters, out chan<
 			}
 			lastTs = p.TsNanos
 			cnt.Matched.Add(1)
+			if traceOn {
+				lg.Tracef("replay", "pkt %d %s: queued (%d -> %d bytes, payload %d -> %d, %s)", rd.Count()-1, describePkt(&in),
+					len(p.Data), len(b.B), origPay, b.In.PayEnd-b.In.PayOff, describeRewrite(rw))
+			}
 			select {
 			case out <- item{b, p.TsNanos + loopShift, origPay}:
 			case <-ctx.Done():
@@ -261,6 +294,8 @@ func RunUDP(ctx context.Context, cfg Config) (*Result, error) {
 	if err != nil {
 		return nil, err
 	}
+	cfg.Log.Infof("replay", "udp: %d conversation rule(s), only-rules=%v, pacing=%s, queue=%d, batch=%d, loop=%d",
+		cfg.convSet.Len(), cfg.OnlyConversations, describePace(cfg.Pace), cfg.QueueSize, cfg.Batch, cfg.Loop)
 	if !cfg.Opts.Target.IsValid() {
 		// The first packet that will actually be replayed decides the route.
 		k, err := ProbeUDP(&cfg)
@@ -268,10 +303,12 @@ func RunUDP(ctx context.Context, cfg Config) (*Result, error) {
 			return nil, err
 		}
 		cfg.Opts.Target = k.Server
+		cfg.Log.Infof("replay", "route decided by the first replayed packet: target %s", k.Server)
 	}
 	if err := cfg.Backend.Open(cfg.Opts); err != nil {
 		return nil, err
 	}
+	cfg.Log.Infof("backend", "opened %s towards %s", cfg.Backend.Name(), cfg.Opts.Target)
 	defer cfg.Backend.Close()
 
 	cnt := cfg.counters()
@@ -313,6 +350,12 @@ func send(ctx context.Context, cfg *Config, pc *pace.Pacer, cnt *Counters, q <-c
 		for i := 0; i < n; i++ {
 			bytes += uint64(len(batch[i]))
 		}
+		if cfg.Log.Enabled(logx.Debug) {
+			cfg.Log.Debugf("send", "batch of %d packets: %d sent, %d bytes, queue depth %d", len(batch), n, bytes, len(q))
+		}
+		if err != nil {
+			cfg.Log.Infof("send", "batch failed after %d of %d packets: %v", n, len(batch), err)
+		}
 		cnt.Sent.Add(uint64(n))
 		cnt.Bytes.Add(bytes)
 		cnt.SendErrs.Add(uint64(len(batch) - n))
@@ -353,4 +396,74 @@ func send(ctx context.Context, cfg *Config, pc *pace.Pacer, cnt *Counters, q <-c
 			return nil
 		}
 	}
+}
+
+func protoName(p uint8) string {
+	switch p {
+	case decode.ProtoTCP:
+		return "TCP"
+	case decode.ProtoUDP:
+		return "UDP"
+	}
+	return fmt.Sprint(p)
+}
+
+// describePkt renders the addressing of a decoded packet for the logs.
+func describePkt(in *decode.Info) string {
+	switch {
+	case !in.HasIP:
+		return "non-IP"
+	case in.HasPorts:
+		return fmt.Sprintf("%s %s:%d > %s:%d", protoName(in.Proto), in.Src, in.SrcPort, in.Dst, in.DstPort)
+	}
+	return fmt.Sprintf("proto %d %s > %s", in.Proto, in.Src, in.Dst)
+}
+
+// describeRewrite summarises what a rewrite changes.
+func describeRewrite(rw *mutate.Rewrite) string {
+	if rw == nil || !rw.Active() {
+		return "unchanged"
+	}
+	s := "rewrite"
+	if rw.SrcIP.IsValid() {
+		s += " src-ip=" + rw.SrcIP.String()
+	}
+	if rw.SrcPort != 0 {
+		s += fmt.Sprintf(" src-port=%d", rw.SrcPort)
+	}
+	if rw.DstIP.IsValid() {
+		s += " dst-ip=" + rw.DstIP.String()
+	}
+	if rw.DstPort != 0 {
+		s += fmt.Sprintf(" dst-port=%d", rw.DstPort)
+	}
+	if rw.SetPayload != nil {
+		s += fmt.Sprintf(" payload=%dB", len(rw.SetPayload))
+	}
+	if len(rw.Replace) > 0 {
+		s += fmt.Sprintf(" replace x%d", len(rw.Replace))
+	}
+	return s
+}
+
+func describePace(c pace.Config) string {
+	switch c.Mode {
+	case pace.Original:
+		sp := c.Speed
+		if sp == 0 {
+			sp = 1
+		}
+		s := fmt.Sprintf("original timing x%g", sp)
+		if c.MaxGap > 0 {
+			s += fmt.Sprintf(", gaps capped at %s", c.MaxGap)
+		}
+		return s
+	case pace.Fixed:
+		return "fixed delay " + c.Delay.String()
+	case pace.PPS:
+		return fmt.Sprintf("%g pps", c.PPS)
+	case pace.Mbps:
+		return fmt.Sprintf("%g Mbit/s", c.Mbps)
+	}
+	return "burst (no pacing)"
 }
