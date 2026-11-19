@@ -1,0 +1,36 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 900 330" width="900" height="330" font-family="Segoe UI, Inter, Helvetica, Arial, sans-serif" role="img" aria-label="pktreplay data flow">
+  <style>
+    .box{fill:#eef3ff;stroke:#2a62e8;stroke-width:1.6}
+    .box2{fill:#e8f6ee;stroke:#17803f;stroke-width:1.6}
+    .box3{fill:#fff4de;stroke:#b8741a;stroke-width:1.6}
+    .t{font-size:15px;font-weight:600;fill:#182033;text-anchor:middle}
+    .s{font-size:12px;fill:#46536b;text-anchor:middle}
+    .l{font-size:12px;fill:#2a62e8;text-anchor:middle;font-weight:600}
+    .a{stroke:#2a62e8;stroke-width:2;fill:none;marker-end:url(#h)}
+  </style>
+  <rect width="900" height="330" rx="16" fill="#f7f9fd" stroke="#dde2ec"/>
+  <defs><marker id="h" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="8" markerHeight="8" orient="auto"><path d="M0 0L10 5L0 10z" fill="#2a62e8"/></marker></defs>
+
+  <text x="300" y="26" class="l">PRODUCER goroutine (disk only)</text>
+  <rect x="20" y="40" width="130" height="64" rx="10" class="box"/><text x="85" y="68" class="t">pcapio</text><text x="85" y="88" class="s">stream reader</text>
+  <rect x="190" y="40" width="130" height="64" rx="10" class="box"/><text x="255" y="68" class="t">decode</text><text x="255" y="88" class="s">offsets, 0 allocs</text>
+  <rect x="360" y="40" width="130" height="64" rx="10" class="box"/><text x="425" y="68" class="t">filter</text><text x="425" y="88" class="s">headers first</text>
+  <rect x="530" y="40" width="130" height="64" rx="10" class="box"/><text x="595" y="68" class="t">conv / mutate</text><text x="595" y="88" class="s">rules, rewrite, csum</text>
+  <path class="a" d="M150 72H188"/><path class="a" d="M320 72H358"/><path class="a" d="M490 72H528"/>
+
+  <rect x="720" y="40" width="130" height="64" rx="10" class="box3"/><text x="785" y="68" class="t">bounded queue</text><text x="785" y="88" class="s">pooled buffers</text>
+  <path class="a" d="M660 72H718"/>
+
+  <text x="520" y="170" class="l">CONSUMER goroutine (network only)</text>
+    <path class="a" d="M785 104V200"/>
+  <rect x="720" y="200" width="130" height="64" rx="10" class="box2"/><text x="785" y="228" class="t">pace</text><text x="785" y="248" class="s">precision clock</text>
+  <rect x="530" y="200" width="130" height="64" rx="10" class="box2"/><text x="595" y="228" class="t">replay</text><text x="595" y="248" class="s">UDP / TCP session</text>
+  <rect x="340" y="200" width="150" height="64" rx="10" class="box2"/><text x="415" y="228" class="t">backend</text><text x="415" y="248" class="s">sendmmsg / WinDivert</text>
+  <path class="a" d="M720 232H662"/><path class="a" d="M530 232H492"/>
+
+  <rect x="150" y="200" width="150" height="64" rx="10" class="box3"/><text x="225" y="228" class="t">network</text><text x="225" y="248" class="s">+ optional recorder</text>
+  <path class="a" d="M340 232H302"/>
+  <path d="M225 264V300H595V266" fill="none" stroke="#17803f" stroke-width="2" stroke-dasharray="6 5" marker-end="url(#g)"/>
+  <text x="410" y="318" class="s">replies from the target (TCP session engine only)</text>
+  <defs><marker id="g" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="8" markerHeight="8" orient="auto"><path d="M0 0L10 5L0 10z" fill="#17803f"/></marker></defs>
+</svg>

@@ -1,0 +1,31 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1280 360" width="1280" height="360" role="img" aria-label="pktreplay: streaming PCAP analysis and replay">
+  <defs>
+    <linearGradient id="bg" x1="0" y1="0" x2="1" y2="1">
+      <stop offset="0" stop-color="#0d1424"/>
+      <stop offset="1" stop-color="#16264d"/>
+    </linearGradient>
+    <linearGradient id="lg" x1="0" y1="0" x2="1" y2="1">
+      <stop offset="0" stop-color="#4f8bff"/>
+      <stop offset="1" stop-color="#1f4fc4"/>
+    </linearGradient>
+    <linearGradient id="wave" x1="0" y1="0" x2="1" y2="0">
+      <stop offset="0" stop-color="#6b9bff" stop-opacity="0"/>
+      <stop offset=".5" stop-color="#6b9bff" stop-opacity=".55"/>
+      <stop offset="1" stop-color="#6b9bff" stop-opacity="0"/>
+    </linearGradient>
+  </defs>
+  <rect width="1280" height="360" fill="url(#bg)"/>
+  <g fill="none" stroke="url(#wave)" stroke-width="3" stroke-linecap="round" stroke-linejoin="round">
+    <path d="M0 312h210l24-40 40 70 30-50 30 20h160l24-56 36 90 28-30h130l24-40 40 66 24-26h420"/>
+    
+  </g>
+  <g transform="translate(96 74)">
+    <rect width="160" height="160" rx="36" fill="url(#lg)"/>
+    <path d="M122 80a42.5 42.5 0 1 1-12.5-30" fill="none" stroke="#fff" stroke-opacity=".35" stroke-width="7.5" stroke-linecap="round"/>
+    <path d="M114 31l1 24-22.500-5z" fill="#fff" fill-opacity=".55"/>
+    <path d="M32 82h21l14-37.500 25 70 15-32.500h20" fill="none" stroke="#fff" stroke-width="9.500" stroke-linecap="round" stroke-linejoin="round"/>
+  </g>
+  <text x="296" y="150" font-family="Segoe UI, Inter, Helvetica, Arial, sans-serif" font-size="88" font-weight="700" fill="#ffffff" letter-spacing="-2">pktreplay</text>
+  <text x="300" y="200" font-family="Segoe UI, Inter, Helvetica, Arial, sans-serif" font-size="30" fill="#a9b8d8">Streaming PCAP analysis and replay with real TCP sessions.</text>
+  <text x="300" y="238" font-family="Segoe UI, Inter, Helvetica, Arial, sans-serif" font-size="22" fill="#7e90b8">Pure Go · Windows + Linux · low memory · no dependencies</text>
+</svg>

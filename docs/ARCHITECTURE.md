@@ -1,4 +1,4 @@
-﻿# Architecture
+# Architecture
 
 ## Language and library choice: Go, standard library only
 
@@ -20,11 +20,11 @@ dependencies** (`go.mod` has none), which also removes supply-chain surface.
  capture file
      |  1 MiB read-ahead (bufio), one reused []byte per record
      v
- pcapio.Reader â”€â”€> decode.Decode â”€â”€> filter.Match â”€â”€> mutate.Buf (pooled) â”€â”€â”
-   (pcap/pcapng)     (offsets only,     (headers first,   Load/Rewrite/        â”‚ bounded
-                      0 allocs)          payload last)    Finalize             â”‚ channel
+ pcapio.Reader ──> decode.Decode ──> filter.Match ──> mutate.Buf (pooled) ──┐
+   (pcap/pcapng)     (offsets only,     (headers first,   Load/Rewrite/        │ bounded
+                      0 allocs)          payload last)    Finalize             │ channel
                                                                                v (4096 items)
-              backend.SendBatch  <â”€â”€  pace.Wait  <â”€â”€  consumer goroutine â”€â”€â”€â”€â”€â”€â”˜
+              backend.SendBatch  <──  pace.Wait  <──  consumer goroutine ──────┘
               (sendmmsg / WinDivertSendEx)
 ```
 
