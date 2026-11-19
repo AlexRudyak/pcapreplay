@@ -77,6 +77,42 @@ func (s *Store) findBySourceLocked(src PcapSource) *Pcap {
 	return nil
 }
 
+// libraryEntryForPath recognises a path inside the library's own pcaps folder and
+// returns the entry whose stored copy it is.
+func (s *Store) libraryEntryForPathLocked(abs string) (*Pcap, bool) {
+	dir := filepath.Join(s.dir, "pcaps")
+	rel, err := filepath.Rel(dir, abs)
+	if err != nil || rel == "." || strings.HasPrefix(rel, "..") || strings.ContainsRune(rel, filepath.Separator) {
+		return nil, false
+	}
+	id := strings.TrimSuffix(rel, filepath.Ext(rel))
+	if !ValidPcapID(id) {
+		return nil, false
+	}
+	p, ok := s.pcaps[id]
+	return p, ok
+}
+
+// OriginalFor maps a path inside the library back to the original capture it
+// stands for (so a run sent from a stored copy is still labelled with the name
+// and place of the capture the user knows). ok is false for any other path.
+func (s *Store) OriginalFor(path string) (original string, ok bool) {
+	abs, err := filepath.Abs(path)
+	if err != nil {
+		return "", false
+	}
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	p, found := s.libraryEntryForPathLocked(abs)
+	if !found {
+		return "", false
+	}
+	if len(p.Sources) > 0 {
+		return p.Sources[0].Path, true
+	}
+	return p.Name, true
+}
+
 func copyExt(name string) string {
 	switch ext := strings.ToLower(filepath.Ext(name)); ext {
 	case ".pcap", ".pcapng", ".cap":
@@ -106,6 +142,16 @@ func (s *Store) RegisterPcap(path string) (Pcap, error) {
 	now := time.Now()
 
 	s.mu.Lock()
+	// Sending a stored copy is a use of that entry: no re-reading, and the copy's
+	// own path must never become one of the entry's "original" locations.
+	if p, ok := s.libraryEntryForPathLocked(abs); ok {
+		cp := *p
+		cp.Uses++
+		cp.LastUsed = now
+		err := s.putPcapLocked(&cp)
+		s.mu.Unlock()
+		return cp, err
+	}
 	st := s.settings
 	if p := s.findBySourceLocked(src); p != nil && (p.CopyState == CopyStored || p.CopyState == CopyRemoved || !st.KeepPcaps || p.CopyState == CopyTooLarge) {
 		cp, err := s.touchPcapLocked(p.ID, src, now)

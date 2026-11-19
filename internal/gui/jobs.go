@@ -265,7 +265,11 @@ func (m *manager) StartReplay(req *ReplayRequest) error {
 					}
 				}
 			}
-			if perr := m.hist.Put(newRunRecord(runID, req, tr, backendName)); perr != nil {
+			capture := req.Path
+			if orig, ok := m.hist.OriginalFor(req.Path); ok {
+				capture = orig // sent from a stored copy: still the capture the user knows
+			}
+			if perr := m.hist.Put(newRunRecord(runID, req, tr, backendName, capture)); perr != nil {
 				m.logf("history: cannot save this run: %v", perr)
 				runID = ""
 				if histW != nil {

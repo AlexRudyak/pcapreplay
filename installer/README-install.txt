@@ -10,6 +10,12 @@ START IT
 
 A sample capture is in the "samples" folder of the install directory.
 
+HISTORY
+  pktreplay keeps a history of what you send and a library of the pcap files you sent (so you can send
+  them again even if the original moves). It lives in %LOCALAPPDATA%\pktreplay\history and is NOT removed
+  when you uninstall; delete that folder yourself if you want it gone. Open History in the header to
+  browse, export or clear it, and to change what is kept.
+
 If the interface does not appear or closes, read the log:
   %LOCALAPPDATA%\pktreplay\pktreplay-gui.log
 Starting pktreplay.exe by double-click or "Run as administrator" also opens the interface (keep that

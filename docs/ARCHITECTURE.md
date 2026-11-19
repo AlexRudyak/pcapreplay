@@ -150,6 +150,32 @@ packet's (rewritten) destination; use `-dst-mac` when conversations are rewritte
 ## Recording (`internal/record`)
 `record.Recorder` wraps any `Backend`: `SendBatch` records the datagrams the backend accepted (a partially failed batch records only what was sent) and `Recv` records replies. Records are raw IP (LINKTYPE_RAW) with nanosecond timestamps taken when the packet crosses the backend; PCAPNG output adds an `epb_flags` direction option. The file is flushed when the backend closes, and the CLI/GUI close the writer again on every exit path (idempotent). Because it is a wrapper it adds no cost when unused and works unchanged with the Linux, Windows and null backends.
 
+## History and pcap library (`internal/history`)
+A small embedded store written with the standard library only (no database dependency): an **append-only JSON-lines
+log** (`history.jsonl`) of `put`/`del` operations for runs and for library entries, replayed into memory on open.
+Each record is one `write` + `fsync`, a torn last line after a crash is skipped, the log is compacted atomically
+(temp file + rename) when dead lines pile up, and a run that was still `running` at startup becomes `interrupted`.
+Settings live in `settings.json`; stored pcaps in `pcaps/<sha256>.pcap`, optional packet copies in `packets/`.
+Two processes writing the same folder is not supported (each would only see its own runs until restart).
+
+*Runs.* A run is written before the send starts and finalised afterwards with the counters, TCP details and
+outcome; the exact request and an opaque UI state are kept so *send again* can restore the screen. Retention
+(max runs, age, size caps) never removes pinned runs or running ones.
+
+*Library.* `RegisterPcap` runs in the background so a large capture never delays a send. A file is identified by
+the SHA-256 of its content, computed while copying (one pass); the `(path, size, mtime)` of every location seen
+is remembered so an unchanged file is not re-read. Files over the per-file limit, or when copies are off, become
+reference entries (id = hash of the file's state); when the same file is later copied the reference is folded into
+the content-hashed entry and the runs are re-pointed. Sending a library copy counts as a use of its entry and the
+run is labelled with the original path, so users never see hash file names. The total size cap evicts the least
+recently used unpinned copies, keeping the entry as `removed`.
+
+*Optional packet copies.* The existing recorder (`internal/record`) also writes the transmitted packets (and replies,
+with PCAPNG direction flags) to the run's file; `history.Preview` decodes them page by page for the run details.
+
+Safety: ids are validated before any file path is built; the API is behind the same token/Origin/content-type guards;
+CSV export prefixes cells starting with `= + - @` so a spreadsheet cannot execute them.
+
 ## Pacing (`internal/pace`)
 Absolute schedule (`start + due`), so a late packet never delays later ones; a stall longer than 250 ms re-bases
 the clock instead of producing a catch-up burst. Waiting is hybrid: `time.Sleep` until 2 ms before the

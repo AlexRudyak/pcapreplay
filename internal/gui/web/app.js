@@ -583,6 +583,376 @@ async function poll() {
   if (s.state !== "running") { clearInterval(poller); poller = null; }
 }
 
+// ---------- history and pcap library ----------
+const H = { enabled: false, tab: "runs", prevScreen: "welcome", runs: [], total: 0, stats: null, settings: null, lib: [], detail: null, pcap: null, pktLoaded: 0, pktTotal: 0 };
+const STATE_LABEL = { running: "Running", done: "Finished", failed: "Failed", cancelled: "Stopped", interrupted: "Interrupted" };
+const COPY_LABEL = { stored: "Copy stored", reference: "Original only", "too-large": "Too large to copy", removed: "Copy removed", failed: "Copy failed" };
+
+function fmtWhen(iso) {
+  const d = new Date(iso), now = new Date(), t = d.toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" });
+  const day = (x) => new Date(x.getFullYear(), x.getMonth(), x.getDate()).getTime();
+  const diff = Math.round((day(now) - day(d)) / 86400000);
+  if (diff === 0) return "Today " + t;
+  if (diff === 1) return "Yesterday " + t;
+  return d.toLocaleDateString([], { day: "numeric", month: "short", year: d.getFullYear() === now.getFullYear() ? undefined : "numeric" }) + " " + t;
+}
+const fmtFull = (iso) => new Date(iso).toLocaleString();
+
+async function refreshHistoryCount() {
+  try {
+    const d = await api("/api/history?limit=1");
+    H.enabled = !!d.enabled; H.stats = d.stats || null; H.settings = d.settings || null;
+    $("#histBtn").hidden = !H.enabled;
+    const n = d.stats ? d.stats.runs : 0;
+    $("#histCount").textContent = n; $("#histCount").hidden = !n;
+    const p = d.stats ? d.stats.pcaps : 0;
+    $("#libCount").textContent = p; $("#libCount").hidden = !p;
+  } catch (_) { /* history unavailable */ }
+}
+
+function backTarget() { return S.lastState === "running" && S.lastKind === "stats" ? "analyzing" : (S.data ? "work" : "welcome"); }
+function openHistory(tab) {
+  if (S.screen !== "history") H.prevScreen = S.screen;
+  show("history"); setTab(tab || H.tab);
+}
+function setTab(t) {
+  H.tab = t;
+  $("#tabRuns").setAttribute("aria-selected", String(t === "runs")); $("#tabLib").setAttribute("aria-selected", String(t === "lib"));
+  $("#runsPane").hidden = t !== "runs"; $("#libPane").hidden = t !== "lib";
+  if (t === "runs") loadHistory(false); else loadLibrary();
+}
+$("#histBtn").onclick = () => openHistory();
+$("#histBack").onclick = () => show(backTarget());
+$("#tabRuns").onclick = () => setTab("runs");
+$("#tabLib").onclick = () => setTab("lib");
+
+function statsLine() {
+  const s = H.stats; if (!s) return "";
+  const mb = (n) => fmtBytes(n);
+  return plural(s.runs, "run") + " · " + plural(s.pcaps, "pcap") + " (" + mb(s.pcapBytes) + " of copies)" + (s.packetsBytes ? " · " + mb(s.packetsBytes) + " of packet copies" : "") + " · stored in " + s.dir;
+}
+
+// ----- runs -----
+const histFilters = () => {
+  const p = new URLSearchParams();
+  const q = $("#hSearch").value.trim(); if (q) p.set("q", q);
+  if ($("#hState").value) p.set("state", $("#hState").value);
+  if ($("#hMode").value) p.set("mode", $("#hMode").value);
+  if ($("#hPinned").checked) p.set("pinned", "1");
+  return p;
+};
+async function loadHistory(append) {
+  const p = histFilters(), filtered = p.toString() !== "";
+  p.set("limit", "50"); p.set("offset", append ? String(H.runs.length) : "0");
+  let d;
+  try { d = await api("/api/history?" + p); } catch (e) { toast(e.message); return; }
+  H.enabled = !!d.enabled;
+  if (d.enabled) { H.runs = append ? H.runs.concat(d.runs) : d.runs; H.total = d.total; H.stats = d.stats; H.settings = d.settings; }
+  renderHistory(filtered);
+}
+function renderHistory(filtered) {
+  const list = $("#hList"); list.replaceChildren();
+  for (const r of H.runs) list.append(runRow(r));
+  $("#hMore").hidden = H.runs.length >= H.total;
+  const empty = $("#hEmpty");
+  empty.hidden = H.runs.length > 0;
+  empty.textContent = !H.enabled ? "History is turned off." : filtered ? "No run matches your search." : "Nothing has been sent yet. Every run you send is listed here, so you can look at it again or send it again.";
+  $("#histSub").textContent = H.enabled ? statsLine() : "";
+  const f = histFilters().toString();
+  $("#expCsv").href = "/api/history/export?format=csv" + (f ? "&" + f : "");
+  $("#expJson").href = "/api/history/export?format=json" + (f ? "&" + f : "");
+}
+function convSummary(r) {
+  const n = r.conversations.length;
+  if (n === 1) {
+    const c = r.conversations[0], parts = c.selector.split("/");
+    let line = parts[1] + " → " + parts[2];
+    if (c.newServer) line += "   now → " + c.newServer;
+    return line;
+  }
+  return plural(n, "conversation") + (r.target ? " → " + r.target : "");
+}
+function runRow(r) {
+  const row = el("div", "hrow"); row.tabIndex = 0;
+  const main = el("div", "hmain"), title = el("div", "htitle");
+  title.append(el("b", "", baseName(r.capture)), el("span", "tag " + r.mode, r.mode.toUpperCase()), el("span", "chip " + (r.dryRun ? "test" : "net"), r.dryRun ? "Test run" : "On the network"));
+  main.append(title, el("div", "hsub", convSummary(r)));
+  if (r.state === "failed" && r.error) main.append(el("div", "hsub", "⚠ " + r.error));
+  if (r.note) main.append(el("div", "hnote", "“" + r.note + "”"));
+  const side = el("div", "hside");
+  side.append(el("span", "pill " + r.state, STATE_LABEL[r.state] || r.state), el("span", "when", fmtWhen(r.startedAt)));
+  side.append(el("span", "res", r.result ? plural(r.result.sent, "packet") + " · " + fmtBytes(r.result.bytes) : "–"));
+  const acts = el("div", "acts");
+  const star = el("button", "star" + (r.pinned ? " on" : ""), r.pinned ? "★" : "☆"); star.type = "button"; star.title = r.pinned ? "Pinned: never removed automatically" : "Pin"; star.setAttribute("aria-label", "Pin");
+  star.onclick = async (e) => { e.stopPropagation(); try { const u = await api("/api/history/" + r.id + "/update", { pinned: !r.pinned }); Object.assign(r, u.run); renderHistory(false); } catch (err) { toast(err.message); } };
+  const again = el("button", "small primary", "Send again"); again.type = "button";
+  again.onclick = (e) => { e.stopPropagation(); sendAgain(r.id); };
+  acts.append(star, again); side.append(acts);
+  row.append(el("span", "dot " + r.state), main, side);
+  row.onclick = () => openRun(r.id);
+  row.onkeydown = (e) => { if (e.key === "Enter") openRun(r.id); };
+  return row;
+}
+let hTimer;
+for (const id of ["#hSearch"]) $(id).addEventListener("input", () => { clearTimeout(hTimer); hTimer = setTimeout(() => loadHistory(false), 250); });
+for (const id of ["#hState", "#hMode", "#hPinned"]) $(id).addEventListener("change", () => loadHistory(false));
+$("#hMore").onclick = () => loadHistory(true);
+
+// ----- run details -----
+function armConfirm(btn, label, action) {
+  const orig = btn.dataset.label || btn.textContent; btn.dataset.label = orig;
+  if (btn.dataset.armed) { clearTimeout(Number(btn.dataset.armed)); delete btn.dataset.armed; btn.textContent = orig; action(); return; }
+  btn.textContent = label;
+  btn.dataset.armed = String(setTimeout(() => { delete btn.dataset.armed; btn.textContent = orig; }, 4000));
+}
+function kvRow(box, k, v) { box.append(el("span", "k", k), el("span", "v", v)); }
+
+async function openRun(id) {
+  let d;
+  try { d = await api("/api/history/" + id); } catch (e) { toast(e.message); return; }
+  H.detail = d; const r = d.run;
+  $("#rdTitle").textContent = baseName(r.capture);
+  const pill = $("#rdPill"); pill.textContent = STATE_LABEL[r.state] || r.state; pill.className = "pill " + r.state;
+  $("#rdWhen").textContent = fmtFull(r.startedAt) + (r.result ? " · " + fmtDur(r.result.elapsedMs / 1000) : "");
+  const err = $("#rdError"); err.hidden = !(r.error || r.state === "interrupted");
+  err.textContent = r.state === "interrupted" ? "The program was closed while this run was still sending." : (r.error || "");
+
+  const f = $("#rdFacts"); f.replaceChildren();
+  kvRow(f, "Capture", r.capture);
+  const lib = d.pcap;
+  kvRow(f, "In the library", lib ? (COPY_LABEL[lib.copyState] || lib.copyState) + (lib.runs > 1 ? " · sent " + lib.runs + " times" : "") : "Not in the library");
+  kvRow(f, "Sent as", r.mode.toUpperCase() + (r.loop > 1 ? ", " + r.loop + " passes" : ""));
+  kvRow(f, "Where", r.dryRun ? "Test run: nothing left this computer" : "On the network (" + r.backend + ")");
+  kvRow(f, "Speed", r.pacing);
+  kvRow(f, "Sent to", r.target || "the recorded addresses");
+
+  const cv = $("#rdConvs"); cv.replaceChildren();
+  for (const c of r.conversations) {
+    const p = c.selector.split("/"), box = el("div", "rdconv");
+    box.append(el("span", "ep", p[0].toUpperCase() + "  " + p[1] + " → " + p[2]));
+    const ch = []; if (c.newClient) ch.push("source now " + c.newClient); if (c.newServer) ch.push("destination now " + c.newServer); if (c.replace) ch.push(plural(c.replace, "text replacement"));
+    box.append(el("small", "", ch.length ? "Changed: " + ch.join(", ") : "Sent exactly as recorded"));
+    cv.append(box);
+  }
+  const g = $("#rdResult"); g.replaceChildren();
+  if (r.result) for (const [v, l] of [[fmtInt(r.result.sent), "packets sent"], [fmtBytes(r.result.bytes), "data sent"], [fmtInt(r.result.pps) + "/s", "packets per second"], [r.result.mbps.toFixed(1) + " Mbit/s", "speed"],
+    ...(r.result.skipped ? [[fmtInt(r.result.skipped), "skipped"]] : []), ...(r.result.sendErrs ? [[fmtInt(r.result.sendErrs), "send errors"]] : [])]) {
+    const x = el("div"); x.append(el("b", "", v), el("span", "", l)); g.append(x);
+  }
+  const tcp = $("#rdTcp"); tcp.replaceChildren(); tcp.hidden = !r.tcp;
+  if (r.tcp) { const t = typeof r.tcp === "string" ? JSON.parse(r.tcp) : r.tcp;
+    for (const [k, v] of [["Connection", t.flow], ["Used source", t.localIp + ":" + t.localPort], ["Retransmissions", String(t.retransmits)], ["Server replied with", fmtBytes(t.rxBytes)], ["Ended", t.finalState || "–"]]) {
+      const x = el("div"); x.append(el("span", "", k), el("span", "", v)); tcp.append(x);
+    } }
+
+  // packets that were transmitted (optional copy)
+  $("#rdPkts").replaceChildren(); H.pktLoaded = 0; H.pktTotal = 0;
+  const has = d.hasPackets;
+  $("#rdPktWrap").hidden = !has; $("#rdMorePkts").hidden = true; $("#rdNoPackets").hidden = has;
+  $("#rdPktCount").textContent = has ? "(" + fmtInt(r.packetsCount) + ")" : "";
+  if (!has) $("#rdNoPackets").textContent = r.packetsPruned ? "The copy of the transmitted packets was removed to stay within the size limit. The sent pcap itself is kept in the library."
+    : (r.result && r.result.sent === 0) ? "No packets were sent."
+    : "No copy of the transmitted packets was kept. You can turn this on in History settings; the pcap that was sent is in the library.";
+  else loadPackets();
+  const dl = $("#rdDownload"); dl.hidden = !has; dl.href = "/api/history/" + r.id + "/packets"; dl.textContent = "Download sent packets";
+
+  $("#rdNote").value = r.note || ""; $("#rdSave").hidden = true;
+  $("#rdPin").textContent = r.pinned ? "★ Pinned" : "☆ Pin";
+  $("#rdAgain").disabled = !d.openPath; $("#rdAgain").title = d.openPath ? "" : "The capture is no longer available";
+  $("#rdDelete").textContent = "Delete"; delete $("#rdDelete").dataset.armed;
+  $("#runDlg").showModal();
+}
+async function loadPackets() {
+  const d = H.detail; if (!d) return;
+  try {
+    const p = await api("/api/history/" + d.run.id + "/preview?offset=" + H.pktLoaded + "&limit=100");
+    H.pktTotal = p.total;
+    const tb = $("#rdPkts");
+    for (const x of p.rows) {
+      const tr = el("tr");
+      tr.append(el("td", "", String(x.n + 1)), el("td", "", "+" + x.relMs.toFixed(x.relMs < 100 ? 2 : 0) + " ms"), el("td", x.dir, x.dir === "out" ? "→" : x.dir === "in" ? "←" : ""),
+        el("td", "mono", x.src && x.dst ? x.src + " → " + x.dst : ""), el("td", "", x.proto), el("td", "num", String(x.len)), el("td", "info", x.info));
+      tb.append(tr);
+    }
+    H.pktLoaded += p.rows.length;
+    $("#rdMorePkts").hidden = H.pktLoaded >= H.pktTotal;
+    $("#rdMorePkts").textContent = "Show more packets (" + fmtInt(H.pktTotal - H.pktLoaded) + " left)";
+  } catch (e) { $("#rdNoPackets").hidden = false; $("#rdNoPackets").textContent = e.message; }
+}
+$("#rdMorePkts").onclick = loadPackets;
+$("#rdNote").addEventListener("input", () => { $("#rdSave").hidden = $("#rdNote").value === (H.detail.run.note || ""); });
+$("#rdSave").onclick = async () => {
+  try { const u = await api("/api/history/" + H.detail.run.id + "/update", { note: $("#rdNote").value }); H.detail.run = u.run; $("#rdSave").hidden = true; toast("Note saved."); if (S.screen === "history") loadHistory(false); } catch (e) { toast(e.message); }
+};
+$("#rdPin").onclick = async () => {
+  try { const u = await api("/api/history/" + H.detail.run.id + "/update", { pinned: !H.detail.run.pinned }); H.detail.run = u.run; $("#rdPin").textContent = u.run.pinned ? "★ Pinned" : "☆ Pin"; if (S.screen === "history") loadHistory(false); } catch (e) { toast(e.message); }
+};
+$("#rdDelete").onclick = () => armConfirm($("#rdDelete"), "Click again to delete", async () => {
+  try { await api("/api/history/" + H.detail.run.id + "/delete", {}); $("#runDlg").close(); toast("Run deleted."); refreshHistoryCount(); loadHistory(false); } catch (e) { toast(e.message); }
+});
+$("#rdAgain").onclick = () => sendAgain(H.detail.run.id, H.detail);
+
+// ----- send again -----
+async function sendAgain(id, detail) {
+  let d = detail;
+  if (!d || d.run.id !== id) { try { d = await api("/api/history/" + id); } catch (e) { toast(e.message); return; } }
+  if (!d.openPath) { toast("The capture is no longer available: the original was moved or deleted and no copy was kept in the library."); return; }
+  let req = {};
+  try { req = typeof d.run.request === "string" ? JSON.parse(d.run.request) : (d.run.request || {}); } catch (_) { /* restore what we can */ }
+  $("#runDlg").close();
+  S.restore = { req, meta: d.run.meta || {}, when: d.run.startedAt, usingCopy: d.openPath !== d.run.capture };
+  S.selected.length = 0; S.data = null; S.analysisPath = ""; S.mode = ""; S.proto = "all"; S.q = ""; $("#search").value = "";
+  S.path = d.openPath; $("#path").value = d.openPath;
+  S.limits = { filter: req.filter || "", start: req.start || 0, count: req.count || 0 };
+  S.view = "cfg"; showRun();
+  analyze();
+}
+function speedFromReq(r) {
+  if (r.paceMode === "burst") return { speed: "burst" };
+  if (r.paceMode === "pps") return { speed: "custom", cType: "pps", cVal: String(r.pps) };
+  if (r.paceMode === "mbps") return { speed: "custom", cType: "mbps", cVal: String(r.mbps) };
+  if (r.paceMode === "fixed") return { speed: "custom", cType: "fixed", cVal: r.delay };
+  return { speed: r.speed === 2 ? "orig2" : r.speed === 10 ? "orig10" : "orig1" };
+}
+function applyRestore() {
+  const { req, meta, when, usingCopy } = S.restore; S.restore = null;
+  S.mode = req.mode === "tcp" || req.mode === "udp" ? req.mode : "";
+  const have = new Map(S.data.conversations.map((c) => [c.selector, c]));
+  let missing = 0;
+  for (const cv of req.conversations || []) {
+    const c = have.get(cv.selector);
+    if (!c) { missing++; continue; }
+    S.selected.push({ selector: c.selector, proto: c.proto, c: { ip: c.clientIp, port: c.clientPort }, s: { ip: c.serverIp, port: c.serverPort },
+      clientIp: cv.clientIp || "", clientPort: cv.clientPort ? String(cv.clientPort) : "", serverIp: cv.serverIp || "", serverPort: cv.serverPort ? String(cv.serverPort) : "",
+      replace: (cv.replace || []).join("\n"), open: false });
+  }
+  const sp = meta.speed ? { speed: meta.speed, cType: meta.cType, cVal: meta.cVal } : speedFromReq(req);
+  $("#speed").value = sp.speed; if (sp.cType) $("#cType").value = sp.cType; if (sp.cVal) $("#cVal").value = sp.cVal;
+  $("#customSpeed").hidden = $("#speed").value !== "custom";
+  const num = (sel, v, d) => { $(sel).value = v === undefined || v === null || v === "" ? d : v; };
+  num("#loop", req.loop, 1); num("#skipBytes", req.skipBytes, 0); num("#seqOffset", req.seqOffset, 0); num("#handshakeTimeout", req.handshakeTimeout, "5s");
+  if (req.ackMode) $("#ackMode").value = req.ackMode;
+  num("#iface", req.iface, ""); num("#srcMac", req.srcMac, ""); num("#dstMac", req.dstMac, ""); num("#ifIndex", req.ifIndex, 0);
+  $("#noFirewall").checked = !!req.noFirewall; $("#recordRx").checked = req.recordRx !== false;
+  $("#tIp").value = ""; $("#tPort").value = ""; $("#bulkReplace").value = "";
+  let note = "";
+  const wantNet = req.backend !== "null";
+  if (wantNet && !S.info.elevated) note = " It was sent on the network; that needs administrator rights, so this is set to a test run.";
+  const radio = document.querySelector('input[name=where][value=' + (wantNet && S.info.elevated ? "auto" : "null") + ']'); if (radio) radio.checked = true;
+  toast("Loaded the settings of the run from " + fmtWhen(when) + (usingCopy ? " (using the pcap stored in the library)" : "") + "." +
+    (missing ? " " + plural(missing, "conversation") + " no longer match the capture." : "") + note + " Review them and press Send.");
+  renderPills(); renderList(); refreshSend();
+}
+
+// ----- pcap library -----
+async function loadLibrary() {
+  const p = new URLSearchParams(); const q = $("#lSearch").value.trim(); if (q) p.set("q", q); if ($("#lPinned").checked) p.set("pinned", "1");
+  let d;
+  try { d = await api("/api/library?" + p); } catch (e) { toast(e.message); return; }
+  H.enabled = !!d.enabled; H.lib = d.pcaps || []; if (d.stats) H.stats = d.stats; if (d.settings) H.settings = d.settings;
+  const list = $("#lList"); list.replaceChildren();
+  for (const e of H.lib) list.append(libRow(e));
+  const empty = $("#lEmpty"); empty.hidden = H.lib.length > 0;
+  empty.textContent = q || $("#lPinned").checked ? "No pcap matches your search." : "The library is empty. Captures you send are added automatically; you can also add the open capture with the button above.";
+  $("#histSub").textContent = statsLine();
+  $("#libCount").textContent = H.stats ? H.stats.pcaps : ""; $("#libCount").hidden = !(H.stats && H.stats.pcaps);
+}
+function libRow(e) {
+  const row = el("div", "hrow"); row.tabIndex = 0;
+  const main = el("div", "hmain"), title = el("div", "htitle");
+  title.append(el("b", "", e.name), el("span", "chip " + e.copyState, COPY_LABEL[e.copyState] || e.copyState));
+  if (e.pinned) title.append(el("span", "chip", "★ pinned"));
+  const src = e.sources && e.sources[0] ? e.sources[0].path : "";
+  main.append(title, el("div", "hsub", fmtBytes(e.size) + " · sent " + (e.uses === 1 ? "once" : e.uses + " times") + (e.lastUsed ? " · last " + fmtWhen(e.lastUsed) : "")));
+  if (src) main.append(el("div", "hsub", src));
+  if (e.note) main.append(el("div", "hnote", "“" + e.note + "”"));
+  const side = el("div", "hside"), acts = el("div", "acts");
+  const open = el("button", "small primary", "Open"); open.type = "button"; open.disabled = !e.canOpen; open.title = e.canOpen ? "" : "Neither the original nor a copy is available";
+  open.onclick = (ev) => { ev.stopPropagation(); openFromLibrary(e); };
+  acts.append(open); side.append(acts);
+  row.append(el("span", "dot" + (e.copyState === "stored" ? " done" : "")), main, side);
+  row.onclick = () => openPcap(e.id);
+  row.onkeydown = (ev) => { if (ev.key === "Enter") openPcap(e.id); };
+  return row;
+}
+function openFromLibrary(e) { if (e.canOpen) openCapture(e.openPath); }
+let lTimer;
+$("#lSearch").addEventListener("input", () => { clearTimeout(lTimer); lTimer = setTimeout(loadLibrary, 250); });
+$("#lPinned").addEventListener("change", loadLibrary);
+$("#lAdd").onclick = async () => {
+  if (!S.path || !S.data) { toast("Open a capture first, then add it here."); return; }
+  try { await api("/api/library/add", { path: S.path }); toast(baseName(S.path) + " was added to the library."); refreshHistoryCount(); loadLibrary(); } catch (e) { toast(e.message); }
+};
+
+async function openPcap(id) {
+  let d;
+  try { d = await api("/api/library/" + id); } catch (e) { toast(e.message); return; }
+  H.pcap = d; const e = d.pcap;
+  $("#pdTitle").textContent = e.name;
+  const pill = $("#pdPill"); pill.textContent = COPY_LABEL[e.copyState] || e.copyState; pill.className = "pill " + (e.copyState === "stored" ? "done" : "cancelled");
+  $("#pdMeta").textContent = fmtBytes(e.size) + " · added " + fmtFull(e.addedAt);
+  const f = $("#pdFacts"); f.replaceChildren();
+  kvRow(f, "Where it was", (e.sources || []).map((s) => s.path).join("\n") || "unknown");
+  kvRow(f, "Stored copy", e.copyFile ? "Yes, in the library folder" : (e.copyState === "too-large" ? "No: larger than the per-file limit" : e.copyState === "reference" ? "No: copies are turned off" : e.copyState === "removed" ? "No: it was removed" : e.copyError ? "No: " + e.copyError : "No"));
+  kvRow(f, "Times sent", String(e.uses)); if (e.lastUsed) kvRow(f, "Last sent", fmtFull(e.lastUsed));
+  kvRow(f, "Identity", e.contentHash ? "Recognised by its content (an identical file elsewhere is the same entry)" : "Recognised by its location only");
+  const runs = $("#pdRuns"); runs.replaceChildren();
+  if (!d.runs.length) runs.append(el("div", "hint", "It has not been sent yet."));
+  for (const r of d.runs) {
+    const box = el("div", "rdconv"); box.style.cursor = "pointer";
+    box.append(el("span", "ep", fmtWhen(r.startedAt) + " · " + r.mode.toUpperCase() + " · " + (STATE_LABEL[r.state] || r.state)), el("small", "", convSummary(r)));
+    box.onclick = () => { $("#pcapDlg").close(); openRun(r.id); };
+    runs.append(box);
+  }
+  $("#pdNote").value = e.note || ""; $("#pdSave").hidden = true;
+  $("#pdPin").textContent = e.pinned ? "★ Pinned" : "☆ Pin";
+  const dl = $("#pdDownload"); dl.hidden = !e.copyFile; dl.href = "/api/library/" + e.id + "/download";
+  $("#pdRemoveCopy").hidden = !e.copyFile;
+  $("#pdOpen").disabled = !e.canOpen;
+  $("#pdDelete").textContent = "Remove from library"; delete $("#pdDelete").dataset.armed;
+  $("#pcapDlg").showModal();
+}
+$("#pdNote").addEventListener("input", () => { $("#pdSave").hidden = $("#pdNote").value === (H.pcap.pcap.note || ""); });
+$("#pdSave").onclick = async () => { try { const u = await api("/api/library/" + H.pcap.pcap.id + "/update", { note: $("#pdNote").value }); H.pcap.pcap = u.pcap; $("#pdSave").hidden = true; toast("Note saved."); loadLibrary(); } catch (e) { toast(e.message); } };
+$("#pdPin").onclick = async () => { try { const u = await api("/api/library/" + H.pcap.pcap.id + "/update", { pinned: !H.pcap.pcap.pinned }); H.pcap.pcap = u.pcap; $("#pdPin").textContent = u.pcap.pinned ? "★ Pinned" : "☆ Pin"; loadLibrary(); } catch (e) { toast(e.message); } };
+$("#pdOpen").onclick = () => { const e = H.pcap.pcap; $("#pcapDlg").close(); openFromLibrary(e); };
+$("#pdRemoveCopy").onclick = () => armConfirm($("#pdRemoveCopy"), "Click again to remove", async () => {
+  try { await api("/api/library/" + H.pcap.pcap.id + "/remove-copy", {}); $("#pcapDlg").close(); toast("The stored copy was removed."); refreshHistoryCount(); loadLibrary(); } catch (e) { toast(e.message); }
+});
+$("#pdDelete").onclick = () => armConfirm($("#pdDelete"), "Click again to remove", async () => {
+  try { await api("/api/library/" + H.pcap.pcap.id + "/delete", {}); $("#pcapDlg").close(); toast("Removed from the library. The runs that used it stay in the history."); refreshHistoryCount(); loadLibrary(); } catch (e) { toast(e.message); }
+});
+
+// ----- settings -----
+$("#histSettingsBtn").onclick = async () => {
+  let d;
+  try { d = await api("/api/history/settings"); } catch (e) { toast(e.message); return; }
+  const s = d.settings; H.settings = s; H.stats = d.stats;
+  $("#hsSave").checked = s.saveHistory; $("#hsRuns").value = s.maxRuns; $("#hsDays").value = s.maxAgeDays;
+  $("#hsKeepPcaps").checked = s.keepPcaps; $("#hsPcapFile").value = s.maxPcapFileMB; $("#hsPcapTotal").value = s.maxPcapsMB;
+  $("#hsPackets").checked = s.savePackets; $("#hsMB").value = s.maxPacketsMB;
+  const info = $("#hsInfo"); info.replaceChildren();
+  for (const [k, v] of [["Stored in", d.stats.dir], ["Runs", fmtInt(d.stats.runs)], ["Pcaps in the library", fmtInt(d.stats.pcaps) + " (" + fmtBytes(d.stats.pcapBytes) + " of copies)"],
+    ["Transmitted-packet copies", fmtBytes(d.stats.packetsBytes)], ["Database file", fmtBytes(d.stats.dbBytes)]]) {
+    const x = el("div"); x.append(el("span", "", k), el("span", "", v)); info.append(x);
+  }
+  $("#hsClear").textContent = "Delete all history…"; delete $("#hsClear").dataset.armed;
+  $("#histSetDlg").showModal();
+};
+$("#hsDone").onclick = async () => {
+  const n = (id) => Math.max(0, parseInt($(id).value || "0", 10) || 0);
+  try {
+    const r = await api("/api/history/settings", { saveHistory: $("#hsSave").checked, maxRuns: n("#hsRuns"), maxAgeDays: n("#hsDays"),
+      keepPcaps: $("#hsKeepPcaps").checked, maxPcapFileMB: n("#hsPcapFile"), maxPcapsMB: n("#hsPcapTotal"), savePackets: $("#hsPackets").checked, maxPacketsMB: n("#hsMB") });
+    $("#histSetDlg").close();
+    toast("Settings saved." + (r.removedRuns ? " " + plural(r.removedRuns, "old run") + " removed." : "") + (r.removedPacketCopies ? " " + r.removedPacketCopies + " packet copies removed." : ""));
+    refreshHistoryCount(); if (H.tab === "runs") loadHistory(false); else loadLibrary();
+  } catch (e) { toast(e.message); }
+};
+$("#hsClear").onclick = () => armConfirm($("#hsClear"), "Click again: delete all (keeps pinned)", async () => {
+  try { const r = await api("/api/history/clear", { keepPinned: true }); $("#histSetDlg").close(); toast(plural(r.removed, "run") + " deleted."); refreshHistoryCount(); loadHistory(false); } catch (e) { toast(e.message); }
+});
+
 // ---------- init ----------
 (async function init() {
   try {

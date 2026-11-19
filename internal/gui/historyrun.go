@@ -83,7 +83,7 @@ func targetOf(entries []history.ConvEntry) string {
 	return "several addresses"
 }
 
-func newRunRecord(id string, req *ReplayRequest, tr replay.Transport, backendName string) history.Run {
+func newRunRecord(id string, req *ReplayRequest, tr replay.Transport, backendName, capture string) history.Run {
 	entries := convEntries(req)
 	reqJSON, _ := json.Marshal(req)
 	loop := req.Loop
@@ -94,7 +94,7 @@ func newRunRecord(id string, req *ReplayRequest, tr replay.Transport, backendNam
 	if len(meta) > 8<<10 {
 		meta = nil // opaque UI state is capped; "send again" then restores the request only
 	}
-	return history.Run{ID: id, StartedAt: time.Now(), State: history.StateRunning, Capture: req.Path, Mode: tr.String(),
+	return history.Run{ID: id, StartedAt: time.Now(), State: history.StateRunning, Capture: capture, Mode: tr.String(),
 		Backend: backendName, DryRun: req.Backend == "null", Pacing: describePacing(req), Loop: loop,
 		Target: targetOf(entries), Conversations: entries, Request: reqJSON, Meta: meta}
 }

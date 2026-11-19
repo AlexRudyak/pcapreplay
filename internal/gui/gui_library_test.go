@@ -101,6 +101,21 @@ func TestSentPcapGoesIntoTheLibraryAndCanBeManaged(t *testing.T) {
 		t.Fatalf("with the original gone the library copy must be offered: %q", det.OpenPath)
 	}
 
+	// sending the stored copy (what "send again" does once the original is gone) keeps the
+	// run labelled with the original capture and counts as a use of the same entry
+	c.sendUDP(det.OpenPath, nil)
+	deadline = time.Now().Add(5 * time.Second)
+	for time.Now().Before(deadline) && c.lib("").Pcaps[0].Uses < 3 {
+		time.Sleep(20 * time.Millisecond)
+	}
+	lat := c.list("").Runs[0]
+	if lat.Capture != p || lat.PcapID != e.ID {
+		t.Fatalf("run sent from the library copy must be labelled with the original: capture=%q pcap=%q", lat.Capture, lat.PcapID)
+	}
+	if l := c.lib(""); len(l.Pcaps) != 1 || l.Pcaps[0].Uses != 3 || len(l.Pcaps[0].Sources) != 1 || l.Pcaps[0].Sources[0].Path != p {
+		t.Fatalf("the library copy must not become a source of its own entry: %+v", l.Pcaps)
+	}
+
 	// notes, pin, search
 	if r, b := c.do("POST", "/api/library/"+e.ID+"/update", map[string]any{"note": "golden DNS trace", "pinned": true}, nil); r.StatusCode != 200 {
 		t.Fatalf("update: %d %s", r.StatusCode, b)
@@ -127,7 +142,7 @@ func TestSentPcapGoesIntoTheLibraryAndCanBeManaged(t *testing.T) {
 	if r, b := c.do("POST", "/api/library/"+e.ID+"/delete", struct{}{}, nil); r.StatusCode != 200 {
 		t.Fatalf("delete: %d %s", r.StatusCode, b)
 	}
-	if len(c.lib("").Pcaps) != 0 || c.list("").Total != 2 {
+	if len(c.lib("").Pcaps) != 0 || c.list("").Total != 3 {
 		t.Fatal("deleting a library entry must not delete the runs that used it")
 	}
 }

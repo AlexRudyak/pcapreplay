@@ -197,6 +197,13 @@ details.setting > summary { cursor: pointer; } details.setting[open] > summary {
 .brow .val { color: var(--muted); font-size: 12.5px; text-align: right; min-width: 70px; }
 
 /* ---------- history ---------- */
+.tabs2 { display: flex; gap: 4px; border-bottom: 1px solid var(--border); margin: 6px 0 18px; }
+.tabs2 button { background: none; border: none; border-bottom: 3px solid transparent; border-radius: 0; padding: 10px 18px; color: var(--muted); font-weight: 600; }
+.tabs2 button:hover:not(:disabled) { background: none; color: var(--text); }
+.tabs2 button[aria-selected=true] { color: var(--accent); border-bottom-color: var(--accent); }
+.libintro { margin-bottom: 14px; max-width: 760px; }
+.hside .acts button { white-space: nowrap; }
+.chip.stored { background: var(--ok-bg); color: var(--ok); } .chip.removed, .chip.failed, .chip.too-large { background: var(--warn-bg); color: var(--warn); }
 .btnlike { display: inline-block; background: var(--surface); border: 1px solid var(--border); border-radius: 10px; padding: 9px 16px; cursor: pointer; font-weight: 500; color: var(--text); text-decoration: none; font-size: 15px; }
 .btnlike:hover { background: var(--surface2); }
 .row.between { justify-content: space-between; flex-wrap: wrap; } .row.mid { justify-content: center; margin: 14px 0 4px; }

@@ -75,6 +75,9 @@ func NewWithOptions(addr, version string, opts Options) (*Server, error) {
 	}
 	var hist *history.Store
 	if opts.DataDir != "" {
+		if abs, aerr := filepath.Abs(opts.DataDir); aerr == nil {
+			opts.DataDir = abs // library copies are opened by path: keep it independent of the working directory
+		}
 		if hist, err = history.Open(opts.DataDir); err != nil {
 			ln.Close()
 			return nil, fmt.Errorf("opening the history in %s: %w", opts.DataDir, err)

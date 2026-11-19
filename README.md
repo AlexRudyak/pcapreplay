@@ -47,6 +47,27 @@ The interface has three screens and one flow:
 When the program is not running as administrator, *Send on the network* is disabled and a *Restart as
 administrator* button relaunches it elevated (after the Windows prompt).
 
+### History and the pcap library
+Every run is recorded (**History** in the header) in a small embedded database in your user data folder
+(`%LOCALAPPDATA%\pktreplay\history` on Windows, `~/.local/share/pktreplay/history` on Linux; change it with
+`pktreplay gui -data-dir DIR` or `PKTREPLAY_DATA`, or turn history off with `-no-history`).
+
+* **Sent runs**: when, which capture, TCP/UDP, test run or network, the conversations and what was changed in
+  them, speed, the result (packets, bytes, errors, TCP details) or why it failed. Search and filter, pin runs
+  you want to keep, add notes, export to CSV/JSON, delete. **Send again** reopens the capture and restores the
+  selection, edits and settings so you only have to review and press Send.
+* **Pcap library**: every capture file you send is remembered by content, so an identical file is stored once
+  however many runs used it. A copy is kept (default: files up to 512 MB, 4 GB in total, least recently used
+  unpinned copies removed first), so a run can be sent again even if the original was moved or deleted; larger
+  files, or when copies are switched off, are kept as references to the original. Add a capture without sending it
+  with *Add the open capture*, download or remove a stored copy, pin or annotate entries.
+* **Optional extra, off by default**: *History settings* can also keep a copy of the packets that were actually
+  transmitted (rewritten as sent, plus replies in TCP mode) per run. The run details then show them decoded
+  and you can download the PCAPNG.
+
+Retention limits (number of runs, age, library size, packet copies) are in *History settings*. Uninstalling the
+program leaves your history in place.
+
 Security model: the server listens on **loopback only** (it refuses any other address), every request needs a
 random per-launch token (the printed URL contains it and is exchanged for an HttpOnly, SameSite=Strict cookie),
 and Host / Origin / content-type checks block DNS-rebinding and cross-site requests. Because it can inject

@@ -187,15 +187,33 @@
         <a id="expJson" class="btnlike" download>Export JSON</a>
       </div>
     </div>
-    <div class="toolbar2">
-      <input id="hSearch" type="search" placeholder="Search captures, addresses, notes…" spellcheck="false" aria-label="Search the history">
-      <select id="hState" aria-label="Result"><option value="">Any result</option><option value="done">Finished</option><option value="failed">Failed</option><option value="cancelled">Stopped</option><option value="interrupted">Interrupted</option></select>
-      <select id="hMode" aria-label="Mode"><option value="">TCP and UDP</option><option value="tcp">TCP</option><option value="udp">UDP</option></select>
-      <label class="check"><input id="hPinned" type="checkbox"> Pinned only</label>
+    <div class="tabs2" role="tablist">
+      <button id="tabRuns" role="tab" aria-selected="true" type="button">Sent runs</button>
+      <button id="tabLib" role="tab" aria-selected="false" type="button">Pcap library <span class="count" id="libCount" hidden></span></button>
     </div>
-    <div id="hList" class="hlist"></div>
-    <div class="row mid"><button id="hMore" type="button" hidden>Show more</button></div>
-    <div id="hEmpty" class="empty-state" hidden></div>
+
+    <div id="runsPane">
+      <div class="toolbar2">
+        <input id="hSearch" type="search" placeholder="Search captures, addresses, notes…" spellcheck="false" aria-label="Search the history">
+        <select id="hState" aria-label="Result"><option value="">Any result</option><option value="done">Finished</option><option value="failed">Failed</option><option value="cancelled">Stopped</option><option value="interrupted">Interrupted</option></select>
+        <select id="hMode" aria-label="Mode"><option value="">TCP and UDP</option><option value="tcp">TCP</option><option value="udp">UDP</option></select>
+        <label class="check"><input id="hPinned" type="checkbox"> Pinned only</label>
+      </div>
+      <div id="hList" class="hlist"></div>
+      <div class="row mid"><button id="hMore" type="button" hidden>Show more</button></div>
+      <div id="hEmpty" class="empty-state" hidden></div>
+    </div>
+
+    <div id="libPane" hidden>
+      <p class="sub libintro">Every capture file you send is remembered here, so you can find it, open it again and send it even after the original has moved. Identical files are stored only once.</p>
+      <div class="toolbar2">
+        <input id="lSearch" type="search" placeholder="Search by name, folder or note…" spellcheck="false" aria-label="Search the library">
+        <label class="check"><input id="lPinned" type="checkbox"> Pinned only</label>
+        <button id="lAdd" type="button">Add the open capture</button>
+      </div>
+      <div id="lList" class="hlist"></div>
+      <div id="lEmpty" class="empty-state" hidden></div>
+    </div>
   </div>
 </section>
 </main>
@@ -236,16 +254,46 @@
   </div>
 </dialog>
 
+<dialog id="pcapDlg" class="wide">
+  <form method="dialog" class="dlg-head"><b id="pdTitle">Pcap</b><button value="close" class="ghost" aria-label="Close">✕</button></form>
+  <div class="rdtop"><span class="pill" id="pdPill"></span><span class="muted" id="pdMeta"></span></div>
+  <div class="kv" id="pdFacts"></div>
+  <h3 class="rdh">Sent in</h3>
+  <div id="pdRuns" class="rdconvs"></div>
+  <h3 class="rdh">Note</h3>
+  <textarea id="pdNote" rows="2" maxlength="2000" placeholder="Add a note, for example what this capture is good for" aria-label="Note"></textarea>
+  <div class="row between rdfoot">
+    <div class="row">
+      <button id="pdPin" type="button">☆ Pin</button>
+      <a id="pdDownload" class="btnlike" hidden>Download</a>
+      <button id="pdRemoveCopy" type="button" hidden>Remove stored copy</button>
+      <button id="pdDelete" type="button" class="danger">Remove from library</button>
+    </div>
+    <div class="row"><button id="pdSave" type="button" hidden>Save note</button><button id="pdOpen" type="button" class="primary">Open</button></div>
+  </div>
+</dialog>
+
 <dialog id="histSetDlg">
   <form method="dialog" class="dlg-head"><b>History settings</b><button value="close" class="ghost" aria-label="Close">✕</button></form>
   <label class="check"><input id="hsSave" type="checkbox"> Keep a history of what I send</label>
-  <label class="check"><input id="hsPackets" type="checkbox"> Keep a copy of the packets of each run <span class="muted">(lets you inspect and download them later)</span></label>
   <div class="grid2">
     <label>Keep at most this many runs<input id="hsRuns" type="number" min="0" placeholder="0 = unlimited"></label>
-    <label>Keep packet copies up to (MB)<input id="hsMB" type="number" min="0" placeholder="0 = unlimited"></label>
     <label>Remove runs older than (days)<input id="hsDays" type="number" min="0" placeholder="0 = keep"></label>
   </div>
-  <p class="hint">When a limit is reached the oldest runs (or packet copies) are removed first. Pinned runs are never removed automatically.</p>
+
+  <h3 class="rdh">Pcap library</h3>
+  <label class="check"><input id="hsKeepPcaps" type="checkbox"> Keep a copy of every pcap I send <span class="muted">(so it can be sent again even if the original moves)</span></label>
+  <div class="grid2">
+    <label>Don't copy files larger than (MB)<input id="hsPcapFile" type="number" min="0" placeholder="0 = no limit"></label>
+    <label>Library size limit (MB)<input id="hsPcapTotal" type="number" min="0" placeholder="0 = unlimited"></label>
+  </div>
+
+  <h3 class="rdh">Optional extra</h3>
+  <label class="check"><input id="hsPackets" type="checkbox"> Also keep a copy of the packets that were actually transmitted <span class="muted">(rewritten as sent, with replies; lets you inspect them per run)</span></label>
+  <div class="grid2">
+    <label>Packet copies limit (MB)<input id="hsMB" type="number" min="0" placeholder="0 = unlimited"></label>
+  </div>
+  <p class="hint">When a limit is reached the oldest unpinned runs and copies are removed first. Pinned items are never removed automatically. Copies of the transmitted packets are off by default.</p>
   <div class="infobox" id="hsInfo"></div>
   <div class="row between rdfoot">
     <button id="hsClear" type="button" class="danger">Delete all history…</button>
