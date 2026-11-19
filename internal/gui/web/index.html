@@ -14,6 +14,7 @@
     <span>pktreplay</span>
   </div>
   <span class="spacer"></span>
+  <button id="histBtn" type="button" class="quiet" hidden>History <span class="count" id="histCount"></span></button>
   <span class="badge" id="elev"></span>
 </header>
 
@@ -164,9 +165,37 @@
           <button id="againBtn" class="primary grow" type="button" hidden>Back to selection</button>
         </div>
         <button id="elevateBtn2" class="small" type="button" hidden>Restart as administrator</button>
+        <button id="viewRun" class="link" type="button" hidden>See this run in the history →</button>
         <details class="logbox"><summary>Technical log</summary><pre id="log"></pre></details>
       </div>
     </aside>
+  </div>
+</section>
+
+<!-- ============ HISTORY ============ -->
+<section id="history" hidden>
+  <div class="hwrap">
+    <div class="hhead">
+      <div>
+        <button id="histBack" type="button" class="link">← Back</button>
+        <h1 class="h1">History</h1>
+        <p class="sub" id="histSub"></p>
+      </div>
+      <div class="row">
+        <button id="histSettingsBtn" type="button">Settings</button>
+        <a id="expCsv" class="btnlike" download>Export CSV</a>
+        <a id="expJson" class="btnlike" download>Export JSON</a>
+      </div>
+    </div>
+    <div class="toolbar2">
+      <input id="hSearch" type="search" placeholder="Search captures, addresses, notes…" spellcheck="false" aria-label="Search the history">
+      <select id="hState" aria-label="Result"><option value="">Any result</option><option value="done">Finished</option><option value="failed">Failed</option><option value="cancelled">Stopped</option><option value="interrupted">Interrupted</option></select>
+      <select id="hMode" aria-label="Mode"><option value="">TCP and UDP</option><option value="tcp">TCP</option><option value="udp">UDP</option></select>
+      <label class="check"><input id="hPinned" type="checkbox"> Pinned only</label>
+    </div>
+    <div id="hList" class="hlist"></div>
+    <div class="row mid"><button id="hMore" type="button" hidden>Show more</button></div>
+    <div id="hEmpty" class="empty-state" hidden></div>
   </div>
 </section>
 </main>
@@ -177,6 +206,51 @@
   <div class="row quick" id="quick"></div>
   <div class="row pathbar"><button id="up" type="button" class="small">↑ Up</button><code id="curDir" class="grow"></code></div>
   <ul id="entries" class="entries"></ul>
+</dialog>
+
+<dialog id="runDlg" class="wide">
+  <form method="dialog" class="dlg-head"><b id="rdTitle">Run</b><button value="close" class="ghost" aria-label="Close">✕</button></form>
+  <div class="rdtop"><span class="pill" id="rdPill"></span><span class="muted" id="rdWhen"></span></div>
+  <div id="rdError" class="alert" hidden></div>
+  <div class="kv" id="rdFacts"></div>
+  <h3 class="rdh">Conversations sent</h3>
+  <div id="rdConvs" class="rdconvs"></div>
+  <h3 class="rdh">Result</h3>
+  <div class="live-grid" id="rdResult"></div>
+  <div id="rdTcp" class="infobox" hidden></div>
+  <h3 class="rdh">Packets that were sent <span class="muted" id="rdPktCount"></span></h3>
+  <p id="rdNoPackets" class="hint" hidden></p>
+  <div class="tablewrap" id="rdPktWrap" hidden>
+    <table class="ptable"><thead><tr><th>#</th><th>Time</th><th></th><th>From → To</th><th>Proto</th><th class="num">Bytes</th><th>Details</th></tr></thead><tbody id="rdPkts"></tbody></table>
+  </div>
+  <div class="row mid"><button id="rdMorePkts" class="small" type="button" hidden>Show more packets</button></div>
+  <h3 class="rdh">Note</h3>
+  <textarea id="rdNote" rows="2" maxlength="2000" placeholder="Add a note to remember what this run was for" aria-label="Note"></textarea>
+  <div class="row between rdfoot">
+    <div class="row">
+      <button id="rdPin" type="button">☆ Pin</button>
+      <a id="rdDownload" class="btnlike" hidden>Download packets</a>
+      <button id="rdDelete" type="button" class="danger">Delete</button>
+    </div>
+    <div class="row"><button id="rdSave" type="button" hidden>Save note</button><button id="rdAgain" type="button" class="primary">Send again</button></div>
+  </div>
+</dialog>
+
+<dialog id="histSetDlg">
+  <form method="dialog" class="dlg-head"><b>History settings</b><button value="close" class="ghost" aria-label="Close">✕</button></form>
+  <label class="check"><input id="hsSave" type="checkbox"> Keep a history of what I send</label>
+  <label class="check"><input id="hsPackets" type="checkbox"> Keep a copy of the packets of each run <span class="muted">(lets you inspect and download them later)</span></label>
+  <div class="grid2">
+    <label>Keep at most this many runs<input id="hsRuns" type="number" min="0" placeholder="0 = unlimited"></label>
+    <label>Keep packet copies up to (MB)<input id="hsMB" type="number" min="0" placeholder="0 = unlimited"></label>
+    <label>Remove runs older than (days)<input id="hsDays" type="number" min="0" placeholder="0 = keep"></label>
+  </div>
+  <p class="hint">When a limit is reached the oldest runs (or packet copies) are removed first. Pinned runs are never removed automatically.</p>
+  <div class="infobox" id="hsInfo"></div>
+  <div class="row between rdfoot">
+    <button id="hsClear" type="button" class="danger">Delete all history…</button>
+    <button id="hsDone" type="button" class="primary">Save</button>
+  </div>
 </dialog>
 
 <dialog id="detailsDlg">

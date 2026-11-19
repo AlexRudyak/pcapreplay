@@ -3,6 +3,7 @@ package gui
 import (
 	"errors"
 	"net/http"
+	"os"
 	"strconv"
 	"time"
 
@@ -20,6 +21,7 @@ func (s *Server) historyRoutes(mux *http.ServeMux) {
 	mux.HandleFunc("POST /api/history/{id}/delete", s.histDelete)
 	mux.HandleFunc("GET /api/history/{id}/packets", s.histPackets)
 	mux.HandleFunc("GET /api/history/{id}/preview", s.histPreview)
+	s.libraryRoutes(mux)
 }
 
 var errNoHistory = errors.New("history is not enabled")
@@ -85,10 +87,27 @@ func (s *Server) histList(w http.ResponseWriter, r *http.Request) {
 }
 
 func (s *Server) histGet(w http.ResponseWriter, r *http.Request) {
-	if run, ok := s.needRun(w, r); ok {
-		_, hasCopy := s.hist.PacketsFile(run.ID)
-		writeJSON(w, 200, map[string]any{"run": run, "hasPackets": hasCopy})
+	run, ok := s.needRun(w, r)
+	if !ok {
+		return
 	}
+	_, hasCopy := s.hist.PacketsFile(run.ID)
+	resp := map[string]any{"run": run, "hasPackets": hasCopy}
+	// Where "send again" can open the capture from: the original if it is still there,
+	// otherwise the library copy.
+	if fi, err := os.Stat(run.Capture); err == nil && !fi.IsDir() {
+		resp["openPath"] = run.Capture
+	}
+	if run.PcapID != "" {
+		if p, found := s.hist.GetPcap(run.PcapID); found {
+			e := s.libEntryOf(p)
+			resp["pcap"] = e
+			if resp["openPath"] == nil && e.CanOpen {
+				resp["openPath"] = e.OpenPath
+			}
+		}
+	}
+	writeJSON(w, 200, resp)
 }
 
 func (s *Server) histUpdate(w http.ResponseWriter, r *http.Request) {
@@ -175,7 +194,7 @@ func (s *Server) histSetSettings(w http.ResponseWriter, r *http.Request) {
 	if !s.needHistory(w) {
 		return
 	}
-	var st history.Settings
+	st := s.hist.Settings() // fields left out of the request keep their current value
 	if !decodeBody(w, r, &st) {
 		return
 	}

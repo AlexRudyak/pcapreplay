@@ -57,6 +57,10 @@ func (c *tc) sendUDP(p string, extra map[string]any) StatusView {
 
 func TestHistoryRecordsRunWithPacketsAndPreview(t *testing.T) {
 	c, dir := newTCHist(t)
+	// copies of the transmitted packets are an opt-in extra
+	if r, b := c.do("POST", "/api/history/settings", map[string]any{"savePackets": true}, nil); r.StatusCode != 200 {
+		t.Fatalf("settings: %d %s", r.StatusCode, b)
+	}
 	p := makePCAP(t, 20)
 	st := c.sendUDP(p, nil)
 	if st.State != stateDone || st.RunID == "" {

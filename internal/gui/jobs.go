@@ -48,6 +48,7 @@ type manager struct {
 	runID    string // history entry of the current/last replay
 
 	hist *history.Store // nil: history disabled
+	bg   sync.WaitGroup // background work (copying the sent pcap into the library)
 }
 
 func newManager(h *history.Store) *manager { return &manager{state: stateIdle, hist: h} }
@@ -148,7 +149,8 @@ func (m *manager) finish(err error) {
 	}
 }
 
-// Wait blocks until no job is running or the timeout expires.
+// Wait blocks until no job is running (and background library work has ended) or
+// the timeout expires.
 func (m *manager) Wait(timeout time.Duration) {
 	deadline := time.Now().Add(timeout)
 	for time.Now().Before(deadline) {
@@ -156,9 +158,15 @@ func (m *manager) Wait(timeout time.Duration) {
 		running := m.state == stateRunning
 		m.mu.Unlock()
 		if !running {
-			return
+			break
 		}
 		time.Sleep(20 * time.Millisecond)
+	}
+	done := make(chan struct{})
+	go func() { m.bg.Wait(); close(done) }()
+	select {
+	case <-done:
+	case <-time.After(time.Until(deadline) + 2*time.Second):
 	}
 }
 
@@ -267,6 +275,20 @@ func (m *manager) StartReplay(req *ReplayRequest) error {
 				}
 			}
 		}
+	}
+	if runID != "" {
+		// Add the pcap that is being sent to the library (copy + hash can take a while
+		// for big files, so it must not hold up the send).
+		m.bg.Add(1)
+		go func(id, path string) {
+			defer m.bg.Done()
+			p, perr := m.hist.RegisterPcap(path)
+			if perr != nil {
+				m.logf("history: could not add the pcap to the library: %v", perr)
+				return
+			}
+			m.hist.Update(id, func(r *history.Run) { r.PcapID = p.ID })
+		}(runID, req.Path)
 	}
 	m.mu.Lock()
 	m.counters, m.runID = cnt, runID

@@ -66,6 +66,7 @@ type Run struct {
 	Error      string    `json:"error,omitempty"`
 
 	Capture       string      `json:"capture"`
+	PcapID        string      `json:"pcapId,omitempty"` // entry in the pcap library
 	Mode          string      `json:"mode"`
 	Backend       string      `json:"backend"`
 	DryRun        bool        `json:"dryRun"`
@@ -90,20 +91,30 @@ type Run struct {
 
 // Settings control what is kept.
 type Settings struct {
-	SaveHistory  bool `json:"saveHistory"`  // record runs at all
-	SavePackets  bool `json:"savePackets"`  // keep a copy of the packets of each run
-	MaxRuns      int  `json:"maxRuns"`      // oldest unpinned runs are removed beyond this (0 = unlimited)
-	MaxPacketsMB int  `json:"maxPacketsMB"` // oldest packet copies are removed beyond this (0 = unlimited)
-	MaxAgeDays   int  `json:"maxAgeDays"`   // unpinned runs older than this are removed (0 = keep)
+	SaveHistory bool `json:"saveHistory"` // record runs at all
+	MaxRuns     int  `json:"maxRuns"`     // oldest unpinned runs are removed beyond this (0 = unlimited)
+	MaxAgeDays  int  `json:"maxAgeDays"`  // unpinned runs older than this are removed (0 = keep)
+
+	// Pcap library: the capture files that were sent.
+	KeepPcaps     bool `json:"keepPcaps"`     // store a copy of every pcap that is sent (otherwise only a reference)
+	MaxPcapFileMB int  `json:"maxPcapFileMB"` // pcaps larger than this are referenced, not copied (0 = no limit)
+	MaxPcapsMB    int  `json:"maxPcapsMB"`    // oldest unpinned copies are removed beyond this total (0 = unlimited)
+
+	// Optional: a copy of the packets that were actually transmitted (rewritten, with replies).
+	SavePackets  bool `json:"savePackets"`
+	MaxPacketsMB int  `json:"maxPacketsMB"` // oldest packet copies are removed beyond this total (0 = unlimited)
 }
 
-// DefaultSettings are used until the user changes them.
+// DefaultSettings are used until the user changes them. Copies of the sent
+// packets are opt-in; copies of the sent pcap files are on, with size limits.
 func DefaultSettings() Settings {
-	return Settings{SaveHistory: true, SavePackets: true, MaxRuns: 1000, MaxPacketsMB: 1024}
+	return Settings{SaveHistory: true, MaxRuns: 1000, KeepPcaps: true, MaxPcapFileMB: 512, MaxPcapsMB: 4096, MaxPacketsMB: 1024}
 }
 
 func (s Settings) validate() error {
-	if s.MaxRuns < 0 || s.MaxRuns > 1_000_000 || s.MaxPacketsMB < 0 || s.MaxPacketsMB > 10_000_000 || s.MaxAgeDays < 0 || s.MaxAgeDays > 36500 {
+	const maxMB = 10_000_000
+	if s.MaxRuns < 0 || s.MaxRuns > 1_000_000 || s.MaxPacketsMB < 0 || s.MaxPacketsMB > maxMB || s.MaxAgeDays < 0 || s.MaxAgeDays > 36500 ||
+		s.MaxPcapFileMB < 0 || s.MaxPcapFileMB > maxMB || s.MaxPcapsMB < 0 || s.MaxPcapsMB > maxMB {
 		return errors.New("history limits out of range")
 	}
 	return nil
@@ -114,6 +125,8 @@ type Stats struct {
 	Dir          string `json:"dir"`
 	Runs         int    `json:"runs"`
 	PacketsBytes int64  `json:"packetsBytes"`
+	Pcaps        int    `json:"pcaps"`
+	PcapBytes    int64  `json:"pcapBytes"` // size of the stored pcap copies
 	DBBytes      int64  `json:"dbBytes"`
 }
 
@@ -139,24 +152,33 @@ type Store struct {
 	logPath  string
 	f        *os.File
 	runs     map[string]*Run
+	pcaps    map[string]*Pcap
 	settings Settings
 	dead     int // superseded or deleted log lines
 }
 
 type logOp struct {
-	Op  string `json:"op"`
-	Run *Run   `json:"run,omitempty"`
-	ID  string `json:"id,omitempty"`
+	Op   string `json:"op"`
+	Run  *Run   `json:"run,omitempty"`
+	Pcap *Pcap  `json:"pcap,omitempty"`
+	ID   string `json:"id,omitempty"`
 }
 
 // Open opens (creating if needed) the store in dir.
 func Open(dir string) (*Store, error) {
-	if err := os.MkdirAll(filepath.Join(dir, "packets"), 0o700); err != nil {
-		return nil, err
+	for _, sub := range []string{"packets", "pcaps"} {
+		if err := os.MkdirAll(filepath.Join(dir, sub), 0o700); err != nil {
+			return nil, err
+		}
 	}
-	s := &Store{dir: dir, logPath: filepath.Join(dir, "history.jsonl"), runs: map[string]*Run{}, settings: DefaultSettings()}
+	if leftovers, _ := filepath.Glob(filepath.Join(dir, "pcaps", "incoming-*")); len(leftovers) > 0 {
+		for _, f := range leftovers { // half-written copies from a crash
+			os.Remove(f)
+		}
+	}
+	s := &Store{dir: dir, logPath: filepath.Join(dir, "history.jsonl"), runs: map[string]*Run{}, pcaps: map[string]*Pcap{}, settings: DefaultSettings()}
 	if b, err := os.ReadFile(filepath.Join(dir, "settings.json")); err == nil {
-		var st Settings
+		st := DefaultSettings() // fields missing from an older file keep their defaults
 		if json.Unmarshal(b, &st) == nil && st.validate() == nil {
 			s.settings = st
 		}
@@ -208,6 +230,18 @@ func (s *Store) load() (corrupt int, err error) {
 					}
 					r := *op.Run
 					s.runs[r.ID] = &r
+				case op.Op == "pcap" && op.Pcap != nil && ValidPcapID(op.Pcap.ID):
+					if _, dup := s.pcaps[op.Pcap.ID]; dup {
+						s.dead++
+					}
+					p := *op.Pcap
+					s.pcaps[p.ID] = &p
+				case op.Op == "delpcap":
+					if _, ok := s.pcaps[op.ID]; ok {
+						delete(s.pcaps, op.ID)
+						s.dead++
+					}
+					s.dead++
 				case op.Op == "del":
 					if _, ok := s.runs[op.ID]; ok {
 						delete(s.runs, op.ID)
@@ -237,6 +271,11 @@ func (s *Store) compactLocked() error {
 		return err
 	}
 	w := bufio.NewWriter(f)
+	for _, p := range s.pcaps {
+		b, _ := json.Marshal(logOp{Op: "pcap", Pcap: p})
+		w.Write(b)
+		w.WriteByte('\n')
+	}
 	for _, r := range s.sorted() {
 		b, _ := json.Marshal(logOp{Op: "put", Run: r})
 		w.Write(b)
@@ -543,6 +582,7 @@ func (s *Store) Prune() (removedRuns, prunedPackets int) {
 			}
 		}
 	}
+	s.prunePcapsLocked()
 	s.maybeCompactLocked()
 	return
 }
@@ -551,10 +591,15 @@ func (s *Store) Prune() (removedRuns, prunedPackets int) {
 func (s *Store) Stats() Stats {
 	s.mu.Lock()
 	defer s.mu.Unlock()
-	st := Stats{Dir: s.dir, Runs: len(s.runs)}
+	st := Stats{Dir: s.dir, Runs: len(s.runs), Pcaps: len(s.pcaps)}
 	for _, r := range s.runs {
 		if r.PacketsFile != "" {
 			st.PacketsBytes += r.PacketsBytes
+		}
+	}
+	for _, p := range s.pcaps {
+		if p.CopyFile != "" {
+			st.PcapBytes += p.Size
 		}
 	}
 	if fi, err := os.Stat(s.logPath); err == nil {

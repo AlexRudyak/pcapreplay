@@ -61,7 +61,7 @@ function toast(msg) {
 }
 function show(screen) {
   S.screen = screen;
-  for (const id of ["welcome", "analyzing", "work"]) $("#" + id).hidden = id !== screen;
+  for (const id of ["welcome", "analyzing", "work", "history"]) $("#" + id).hidden = id !== screen;
 }
 
 // ---------- recent files ----------
@@ -122,7 +122,7 @@ function handleStats(s) {
   if (running && s.scan) {
     $("#anBar").style.width = s.scan.percent.toFixed(1) + "%";
     $("#anText").textContent = fmtInt(s.scan.packets) + " packets · " + fmtBytes(s.scan.bytes) + (s.scan.total ? " of " + fmtBytes(s.scan.total) : "") + " · " + fmtDur(s.elapsedSec);
-    if (S.screen !== "analyzing") show("analyzing");
+    if (S.screen !== "analyzing" && S.screen !== "history") show("analyzing");
     return;
   }
   if (s.state === "failed") { analysisFailed(s.error || "The capture could not be read."); return; }
@@ -141,7 +141,8 @@ function onAnalyzed(sum, partial) {
   const have = new Set(sum.conversations.map((c) => c.selector));
   const before = S.selected.length;
   for (let i = S.selected.length - 1; i >= 0; i--) if (!have.has(S.selected[i].selector)) S.selected.splice(i, 1);
-  show("work");
+  if (S.screen === "history") H.prevScreen = "work"; else show("work");
+  if (S.restore) applyRestore();
   if (before > S.selected.length) toast(plural(before - S.selected.length, "selected conversation") + " no longer match the limits and were unselected.");
   if (partial) toast("Analysis was stopped early: the list is incomplete.");
   renderFileBar(); renderPills(); renderList(); refreshSend();
@@ -456,6 +457,7 @@ function replayBody() {
       replace: [...r.replace.split("\n").filter((l) => l.trim()), ...bulk],
     })),
     onlyConversations: true,
+    meta: { speed: $("#speed").value, cType: $("#cType").value, cVal: $("#cVal").value },
   };
 }
 
@@ -565,7 +567,9 @@ function handleRun(s) {
   }
   $("#log").textContent = s.log.join("\n");
   $("#stopBtn").hidden = !running; $("#againBtn").hidden = running;
+  S.lastRunId = s.runId || ""; $("#viewRun").hidden = !s.runId || running;
 }
+$("#viewRun").onclick = () => { if (S.lastRunId) { openHistory(); openRun(S.lastRunId); } };
 
 // ---------- polling ----------
 function startPolling() { clearInterval(poller); poller = setInterval(poll, 400); poll(); }
@@ -574,6 +578,7 @@ async function poll() {
   try { s = await api("/api/status"); } catch (_) { return; }
   S.lastState = s.state; S.lastKind = s.kind;
   if (s.kind === "stats") handleStats(s); else if (s.kind === "replay") handleRun(s);
+  if (s.kind === "replay" && s.state !== "running" && s.runId && S.countedRun !== s.runId) { S.countedRun = s.runId; refreshHistoryCount(); if (S.screen === "history") loadHistory(false); }
   if (S.data) refreshSend();
   if (s.state !== "running") { clearInterval(poller); poller = null; }
 }
@@ -589,5 +594,6 @@ async function poll() {
   try { const ses = JSON.parse(localStorage.getItem("pktreplay.session") || "null"); if (ses && ses.path) { S.path = ses.path; S.analysisPath = ses.path; S.limits = ses.limits || S.limits; } } catch (_) { /* none */ }
   renderWelcomeLists();
   show("welcome");
+  refreshHistoryCount();
   poll(); // pick up a job that is already running or finished (page reload)
 })();

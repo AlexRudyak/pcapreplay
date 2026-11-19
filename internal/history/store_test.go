@@ -237,14 +237,14 @@ func TestIDValidationAndSettings(t *testing.T) {
 		t.Fatal("negative limit accepted")
 	}
 	st := DefaultSettings()
-	st.SavePackets = false
+	st.SavePackets = true // off by default: flipping it must survive a restart
 	if err := s.SetSettings(st); err != nil {
 		t.Fatal(err)
 	}
 	s.Close()
 	s2 := open(t, s.dir)
 	defer s2.Close()
-	if s2.Settings().SavePackets {
+	if !s2.Settings().SavePackets {
 		t.Fatal("settings not persisted")
 	}
 }
