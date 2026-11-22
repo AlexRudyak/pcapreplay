@@ -1,4 +1,4 @@
-// Package gui serves a local web interface for pktreplay.
+// Package gui serves a local web interface for pcapreplay.
 //
 // The server binds to the loopback interface only and every request must carry
 // a random per-launch token (set as an HttpOnly SameSite=Strict cookie by the
@@ -26,14 +26,14 @@ import (
 	"strings"
 	"time"
 
-	"github.com/AlexRudyak/pktreplay/internal/filter"
-	"github.com/AlexRudyak/pktreplay/internal/history"
+	"github.com/AlexRudyak/pcapreplay/internal/filter"
+	"github.com/AlexRudyak/pcapreplay/internal/history"
 )
 
 //go:embed web/*
 var webFS embed.FS
 
-const cookieName = "pktreplay_token"
+const cookieName = "pcapreplay_token"
 
 // Server is the GUI HTTP server.
 type Server struct {
@@ -149,7 +149,7 @@ func (s *Server) guard(next http.Handler) http.Handler {
 		// First visit: exchange the URL token for a cookie, then drop it from the address bar.
 		if t := r.URL.Query().Get("t"); t != "" && r.Method == http.MethodGet {
 			if s.validToken(t) {
-				w.Header().Set("X-Pktreplay", "gui") // lets a second launch recognise this instance
+				w.Header().Set("X-Pcapreplay", "gui") // lets a second launch recognise this instance
 				http.SetCookie(w, &http.Cookie{Name: cookieName, Value: t, Path: "/", HttpOnly: true,
 					SameSite: http.SameSiteStrictMode})
 				http.Redirect(w, r, r.URL.Path, http.StatusSeeOther)
@@ -158,7 +158,7 @@ func (s *Server) guard(next http.Handler) http.Handler {
 		}
 		c, err := r.Cookie(cookieName)
 		if err != nil || !s.validToken(c.Value) {
-			http.Error(w, "unauthorized: open the URL printed by `pktreplay gui` (it contains the access token)", http.StatusUnauthorized)
+			http.Error(w, "unauthorized: open the URL printed by `pcapreplay gui` (it contains the access token)", http.StatusUnauthorized)
 			return
 		}
 		if r.Method != http.MethodGet && r.Method != http.MethodHead {

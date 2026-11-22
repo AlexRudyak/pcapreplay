@@ -9,10 +9,10 @@ import (
 	"testing"
 	"time"
 
-	"github.com/AlexRudyak/pktreplay/internal/backend"
-	"github.com/AlexRudyak/pktreplay/internal/craft"
-	"github.com/AlexRudyak/pktreplay/internal/decode"
-	"github.com/AlexRudyak/pktreplay/internal/pcapio"
+	"github.com/AlexRudyak/pcapreplay/internal/backend"
+	"github.com/AlexRudyak/pcapreplay/internal/craft"
+	"github.com/AlexRudyak/pcapreplay/internal/decode"
+	"github.com/AlexRudyak/pcapreplay/internal/pcapio"
 )
 
 func datagram(i int) []byte {

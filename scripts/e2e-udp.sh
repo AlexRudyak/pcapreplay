@@ -1,10 +1,10 @@
 #!/usr/bin/env bash
 # End-to-end UDP replay over real AF_PACKET sockets and a veth pair (needs root).
-# Usage: scripts/e2e-udp.sh <pktreplay> <capture.pcap with UDP/53 packets>
+# Usage: scripts/e2e-udp.sh <pcapreplay> <capture.pcap with UDP/53 packets>
 set -euo pipefail
 cd "$(dirname "$0")"
 . ./netns.sh
-BIN=${1:?path to pktreplay}
+BIN=${1:?path to pcapreplay}
 CAP=${2:?capture}
 trap ns_down EXIT
 ns_up

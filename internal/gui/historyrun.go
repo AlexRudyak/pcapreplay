@@ -10,9 +10,9 @@ import (
 	"strings"
 	"time"
 
-	"github.com/AlexRudyak/pktreplay/internal/history"
-	"github.com/AlexRudyak/pktreplay/internal/record"
-	"github.com/AlexRudyak/pktreplay/internal/replay"
+	"github.com/AlexRudyak/pcapreplay/internal/history"
+	"github.com/AlexRudyak/pcapreplay/internal/record"
+	"github.com/AlexRudyak/pcapreplay/internal/replay"
 )
 
 // describePacing renders the chosen speed in words for the run record.

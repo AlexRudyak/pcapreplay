@@ -1,11 +1,11 @@
-; Inno Setup script for pktreplay (Windows x64).
+; Inno Setup script for pcapreplay (Windows x64).
 ; Build with installer\build.ps1, which stages the files under dist\stage and
 ; calls ISCC with /DAppVersion=<version>.
 
 #ifndef AppVersion
-  #define AppVersion "0.1.0"
+  #define AppVersion "0.2.0"
 #endif
-#define AppName "pktreplay"
+#define AppName "pcapreplay"
 #define Stage "..\dist\stage"
 
 [Setup]
@@ -14,7 +14,7 @@ AppId={{598A8418-56AC-43B8-ABBC-57951B040CDD}
 AppName={#AppName}
 AppVersion={#AppVersion}
 AppVerName={#AppName} {#AppVersion}
-AppPublisher=pktreplay
+AppPublisher=pcapreplay
 AppComments=Streaming PCAP/PCAPNG analysis and replay
 DefaultDirName={autopf}\{#AppName}
 DefaultGroupName={#AppName}
@@ -26,9 +26,9 @@ PrivilegesRequiredOverridesAllowed=dialog
 ArchitecturesAllowed=x64compatible
 ArchitecturesInstallIn64BitMode=x64compatible
 OutputDir=..\dist
-OutputBaseFilename=pktreplay-setup-{#AppVersion}
-SetupIconFile={#Stage}\pktreplay.ico
-UninstallDisplayIcon={app}\pktreplay.ico
+OutputBaseFilename=pcapreplay-setup-{#AppVersion}
+SetupIconFile={#Stage}\pcapreplay.ico
+UninstallDisplayIcon={app}\pcapreplay.ico
 UninstallDisplayName={#AppName} {#AppVersion}
 VersionInfoVersion={#AppVersion}.0
 VersionInfoProductName={#AppName}
@@ -46,13 +46,13 @@ InfoAfterFile={#Stage}\README-install.txt
 Name: "english"; MessagesFile: "compiler:Default.isl"
 
 [Tasks]
-Name: "addpath"; Description: "Add pktreplay to the &PATH (run it from any terminal)"; GroupDescription: "Command line:"
+Name: "addpath"; Description: "Add pcapreplay to the &PATH (run it from any terminal)"; GroupDescription: "Command line:"
 Name: "desktopicon"; Description: "Create a &desktop shortcut"; GroupDescription: "Shortcuts:"; Flags: unchecked
 
 [Files]
-Source: "{#Stage}\pktreplay.exe"; DestDir: "{app}"; Flags: ignoreversion
-Source: "{#Stage}\pktreplay-gui.exe"; DestDir: "{app}"; Flags: ignoreversion
-Source: "{#Stage}\pktreplay.ico"; DestDir: "{app}"; Flags: ignoreversion
+Source: "{#Stage}\pcapreplay.exe"; DestDir: "{app}"; Flags: ignoreversion
+Source: "{#Stage}\pcapreplay-gui.exe"; DestDir: "{app}"; Flags: ignoreversion
+Source: "{#Stage}\pcapreplay.ico"; DestDir: "{app}"; Flags: ignoreversion
 Source: "{#Stage}\README.md"; DestDir: "{app}"; Flags: ignoreversion
 Source: "{#Stage}\README-install.txt"; DestDir: "{app}"; Flags: ignoreversion
 Source: "{#Stage}\docs\*"; DestDir: "{app}\docs"; Flags: ignoreversion recursesubdirs
@@ -66,16 +66,26 @@ Source: "redist\WinDivert64.sys"; DestDir: "{app}"; Flags: ignoreversion
 Source: "redist\WinDivert-LICENSE.txt"; DestDir: "{app}"; Flags: ignoreversion
 #endif
 
+[InstallDelete]
+; Upgrading from 0.1.x, when the program was called pktreplay: remove what the old version installed.
+Type: files; Name: "{app}\pktreplay.exe"
+Type: files; Name: "{app}\pktreplay-gui.exe"
+Type: files; Name: "{app}\pktreplay.ico"
+Type: files; Name: "{autoprograms}\pktreplay.lnk"
+Type: files; Name: "{autoprograms}\pktreplay (Administrator).lnk"
+Type: files; Name: "{autoprograms}\Uninstall pktreplay.lnk"
+Type: files; Name: "{autodesktop}\pktreplay.lnk"
+
 [Icons]
-Name: "{autoprograms}\{#AppName}"; Filename: "{app}\pktreplay-gui.exe"; IconFilename: "{app}\pktreplay.ico"; Comment: "Analyze and replay packet captures"
-Name: "{autoprograms}\{#AppName} (Administrator)"; Filename: "{app}\pktreplay-gui.exe"; IconFilename: "{app}\pktreplay.ico"; Comment: "Needed for raw packet injection"
+Name: "{autoprograms}\{#AppName}"; Filename: "{app}\pcapreplay-gui.exe"; IconFilename: "{app}\pcapreplay.ico"; Comment: "Analyze and replay packet captures"
+Name: "{autoprograms}\{#AppName} (Administrator)"; Filename: "{app}\pcapreplay-gui.exe"; IconFilename: "{app}\pcapreplay.ico"; Comment: "Needed for raw packet injection"
 Name: "{autoprograms}\Uninstall {#AppName}"; Filename: "{uninstallexe}"
-Name: "{autodesktop}\{#AppName}"; Filename: "{app}\pktreplay-gui.exe"; IconFilename: "{app}\pktreplay.ico"; Tasks: desktopicon
+Name: "{autodesktop}\{#AppName}"; Filename: "{app}\pcapreplay-gui.exe"; IconFilename: "{app}\pcapreplay.ico"; Tasks: desktopicon
 
 [Run]
 ; Mark the "(Administrator)" shortcut as "Run as administrator" (bit 0x20 of byte 0x15 of the .lnk).
 Filename: "powershell.exe"; Parameters: "-NoProfile -ExecutionPolicy Bypass -Command ""$p='{autoprograms}\{#AppName} (Administrator).lnk'; $b=[IO.File]::ReadAllBytes($p); $b[21]=$b[21] -bor 32; [IO.File]::WriteAllBytes($p,$b)"""; Flags: runhidden; StatusMsg: "Configuring the Administrator shortcut..."
-Filename: "{app}\pktreplay-gui.exe"; Description: "Launch {#AppName}"; Flags: nowait postinstall skipifsilent
+Filename: "{app}\pcapreplay-gui.exe"; Description: "Launch {#AppName}"; Flags: nowait postinstall skipifsilent
 
 [Code]
 const

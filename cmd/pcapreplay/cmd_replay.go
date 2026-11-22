@@ -12,15 +12,15 @@ import (
 	"strings"
 	"time"
 
-	"github.com/AlexRudyak/pktreplay/internal/backend"
-	"github.com/AlexRudyak/pktreplay/internal/conv"
-	"github.com/AlexRudyak/pktreplay/internal/filter"
-	"github.com/AlexRudyak/pktreplay/internal/logx"
-	"github.com/AlexRudyak/pktreplay/internal/mutate"
-	"github.com/AlexRudyak/pktreplay/internal/pace"
-	"github.com/AlexRudyak/pktreplay/internal/pcapio"
-	"github.com/AlexRudyak/pktreplay/internal/record"
-	"github.com/AlexRudyak/pktreplay/internal/replay"
+	"github.com/AlexRudyak/pcapreplay/internal/backend"
+	"github.com/AlexRudyak/pcapreplay/internal/conv"
+	"github.com/AlexRudyak/pcapreplay/internal/filter"
+	"github.com/AlexRudyak/pcapreplay/internal/logx"
+	"github.com/AlexRudyak/pcapreplay/internal/mutate"
+	"github.com/AlexRudyak/pcapreplay/internal/pace"
+	"github.com/AlexRudyak/pcapreplay/internal/pcapio"
+	"github.com/AlexRudyak/pcapreplay/internal/record"
+	"github.com/AlexRudyak/pcapreplay/internal/replay"
 )
 
 type listFlag []string
@@ -55,12 +55,12 @@ func parseMAC(name, s string) (*[6]byte, error) {
 	return &m, nil
 }
 
-// cmdReplay implements "pktreplay replay": it parses the flags into a replay.Config, wires up
+// cmdReplay implements "pcapreplay replay": it parses the flags into a replay.Config, wires up
 // recording and logging, runs the UDP or TCP engine and prints the result.
 func cmdReplay(args []string) error {
 	fs := flag.NewFlagSet("replay", flag.ExitOnError)
 	fs.Usage = func() {
-		fmt.Fprint(os.Stderr, `usage: pktreplay replay -mode tcp|udp [flags] <capture>
+		fmt.Fprint(os.Stderr, `usage: pcapreplay replay -mode tcp|udp [flags] <capture>
 
 Transport (mandatory):
   -mode tcp|udp        udp: stateless injection; tcp: real handshake, then replay of one client stream
@@ -69,7 +69,7 @@ Selection:
   -filter EXPR         e.g. 'src_ip == 192.168.1.10 AND dst_port == 8080'
   -start N -count N    packet range (with -index for O(1) seeking); -loop N passes
 
-Per-conversation rewrites (list conversations with 'pktreplay conversations'):
+Per-conversation rewrites (list conversations with 'pcapreplay conversations'):
   -conv RULE           change ONE conversation, consistently in both directions; repeatable
                        RULE = proto/client/server[,client-ip=IP][,client-port=N][,server-ip=IP][,server-port=N][,replace=a=>b]
   -only-conv           replay only the conversations that have a -conv rule (implied in TCP mode)

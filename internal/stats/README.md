@@ -34,4 +34,4 @@ report honestly when they approximate (`Untracked`, error bounds).
 
 `stats_test.go` and the sketch tests check counters, ordering, error bounds and the conversation rows.
 
-Used by: `cmd/pktreplay` (stats, conversations), `gui` (analysis jobs).
+Used by: `cmd/pcapreplay` (stats, conversations), `gui` (analysis jobs).

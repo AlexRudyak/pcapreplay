@@ -8,11 +8,11 @@ import (
 	"path/filepath"
 	"time"
 
-	"github.com/AlexRudyak/pktreplay/internal/history"
+	"github.com/AlexRudyak/pcapreplay/internal/history"
 )
 
-// A running GUI records where it listens so that starting pktreplay again (the Start Menu entry, a
-// double-click on pktreplay-gui.exe after the browser tab was closed) re-opens that instance instead
+// A running GUI records where it listens so that starting pcapreplay again (the Start Menu entry, a
+// double-click on pcapreplay-gui.exe after the browser tab was closed) re-opens that instance instead
 // of starting a second process. The file holds the access token, so it lives in the per-user data
 // folder, which other accounts cannot read.
 type guiInstance struct {
@@ -51,7 +51,7 @@ func runningInstance(needElevated bool) (string, bool) {
 	if err != nil || (u.Hostname() != "127.0.0.1" && u.Hostname() != "localhost") {
 		return "", false
 	}
-	// Only a pktreplay GUI that accepts this token answers with the marker; a stale file whose port
+	// Only a pcapreplay GUI that accepts this token answers with the marker; a stale file whose port
 	// was reused by something else fails here.
 	c := &http.Client{Timeout: 2 * time.Second, CheckRedirect: func(*http.Request, []*http.Request) error { return http.ErrUseLastResponse }}
 	resp, err := c.Get(in.URL)
@@ -59,7 +59,7 @@ func runningInstance(needElevated bool) (string, bool) {
 		return "", false
 	}
 	resp.Body.Close()
-	if resp.Header.Get("X-Pktreplay") != "gui" {
+	if resp.Header.Get("X-Pcapreplay") != "gui" {
 		return "", false
 	}
 	return in.URL, true

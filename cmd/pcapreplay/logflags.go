@@ -6,7 +6,7 @@ import (
 	"io"
 	"os"
 
-	"github.com/AlexRudyak/pktreplay/internal/logx"
+	"github.com/AlexRudyak/pcapreplay/internal/logx"
 )
 
 // levelFlag is a boolean-style flag that raises the log level to a fixed value

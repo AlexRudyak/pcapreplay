@@ -54,4 +54,4 @@ jobs:
           GOOS=${GOOS%/*} GOARCH=${{ matrix.target }}
           GOARCH=${GOARCH#*/}
           export GOOS GOARCH
-          go build -o /dev/null ./cmd/pktreplay
+          go build -o /dev/null ./cmd/pcapreplay

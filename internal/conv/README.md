@@ -41,4 +41,4 @@ selector is wrong.
 `conv_test.go` covers key canonicalisation, role detection (including a late SYN), the table cap and selector parsing;
 `replay/conv_test.go` checks the end-to-end effect on packets.
 
-Used by: `stats`, `replay`, `gui`, `cmd/pktreplay`.
+Used by: `stats`, `replay`, `gui`, `cmd/pcapreplay`.

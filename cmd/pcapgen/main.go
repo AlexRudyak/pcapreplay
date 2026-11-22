@@ -11,7 +11,7 @@ import (
 	"net/netip"
 	"os"
 
-	"github.com/AlexRudyak/pktreplay/internal/craft"
+	"github.com/AlexRudyak/pcapreplay/internal/craft"
 )
 
 // main parses the flags and writes the requested synthetic capture.

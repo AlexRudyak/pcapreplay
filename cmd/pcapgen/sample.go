@@ -7,8 +7,8 @@ import (
 	"net/netip"
 	"os"
 
-	"github.com/AlexRudyak/pktreplay/internal/checksum"
-	"github.com/AlexRudyak/pktreplay/internal/craft"
+	"github.com/AlexRudyak/pcapreplay/internal/checksum"
+	"github.com/AlexRudyak/pcapreplay/internal/craft"
 )
 
 var (
@@ -92,7 +92,7 @@ func genSample(path string) error {
 	cSeq += uint32(len(req))
 	emit(450, s(sSeq, cSeq, ACK, nil, nil))
 
-	body := "<!doctype html>\n<html><head><title>Sample</title></head>\n<body><h1>pktreplay sample capture</h1>\n" +
+	body := "<!doctype html>\n<html><head><title>Sample</title></head>\n<body><h1>pcapreplay sample capture</h1>\n" +
 		"<p>This page exists only inside a synthetic recording.</p></body></html>\n"
 	resp := []byte(fmt.Sprintf("HTTP/1.1 200 OK\r\nServer: nginx/1.24\r\nContent-Type: text/html\r\nContent-Length: %d\r\nConnection: close\r\n\r\n%s",
 		len(body), body))

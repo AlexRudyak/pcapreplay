@@ -22,7 +22,7 @@ func installRSTDrop(f Flow) (func() error, error) {
 		proto = "ip6"
 	}
 	if nft, err := exec.LookPath("nft"); err == nil {
-		table := fmt.Sprintf("pktreplay_%d", os.Getpid())
+		table := fmt.Sprintf("pcapreplay_%d", os.Getpid())
 		script := fmt.Sprintf(`add table inet %[1]s
 add chain inet %[1]s out { type filter hook output priority -10; policy accept; }
 add rule inet %[1]s out %[2]s saddr %[3]s %[2]s daddr %[4]s tcp sport %[5]d tcp dport %[6]d tcp flags & rst == rst drop

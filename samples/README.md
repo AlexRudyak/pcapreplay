@@ -1,6 +1,6 @@
 # samples
 
-`sample-mixed.pcap` is a 23-packet synthetic capture that opens in Wireshark/tshark, in `pktreplay stats`, and in the GUI:
+`sample-mixed.pcap` is a 23-packet synthetic capture that opens in Wireshark/tshark, in `pcapreplay stats`, and in the GUI:
 
 | Conversation | Packets |
 |---|---|
@@ -13,7 +13,7 @@
 Regenerate it with `go run ./cmd/pcapgen -sample -o samples/sample-mixed.pcap`. It contains no real traffic.
 
 ```bash
-pktreplay stats samples/sample-mixed.pcap
-pktreplay conversations samples/sample-mixed.pcap
-pktreplay replay -mode tcp -backend null -burst samples/sample-mixed.pcap   # picks the HTTP flow
+pcapreplay stats samples/sample-mixed.pcap
+pcapreplay conversations samples/sample-mixed.pcap
+pcapreplay replay -mode tcp -backend null -burst samples/sample-mixed.pcap   # picks the HTTP flow
 ```

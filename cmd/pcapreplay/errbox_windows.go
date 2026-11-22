@@ -16,7 +16,7 @@ func reportError(msg string) {
 	if defaultCommand == "" {
 		return
 	}
-	title, _ := syscall.UTF16PtrFromString("pktreplay")
+	title, _ := syscall.UTF16PtrFromString("pcapreplay")
 	text, err := syscall.UTF16PtrFromString(msg)
 	if err != nil {
 		return

@@ -6,7 +6,7 @@ import (
 	"encoding/binary"
 	"net/netip"
 
-	"github.com/AlexRudyak/pktreplay/internal/checksum"
+	"github.com/AlexRudyak/pcapreplay/internal/checksum"
 )
 
 // Spec describes a frame to build. A zero MAC pair with NoEth set emits a raw

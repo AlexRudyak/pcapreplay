@@ -73,4 +73,4 @@ decision taken). The per-packet checks happen once outside the loop, so a quiet 
 implementing `backend.Backend` (a minimal TCP peer), covering handshake, mid-stream anchoring, skip bytes, offsets,
 payload length changes, mid-stream sequence wraparound, a lost segment and its retransmission, acknowledgement of server data, handshake failures (refused, timed out), recording of the whole conversation, and flow selection.
 
-Used by: `gui`, `cmd/pktreplay`.
+Used by: `gui`, `cmd/pcapreplay`.

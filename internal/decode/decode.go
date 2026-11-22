@@ -7,7 +7,7 @@ import (
 	"encoding/binary"
 	"net/netip"
 
-	"github.com/AlexRudyak/pktreplay/internal/pcapio"
+	"github.com/AlexRudyak/pcapreplay/internal/pcapio"
 )
 
 // IP protocol numbers and EtherTypes used by the engine.

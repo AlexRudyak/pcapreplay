@@ -9,13 +9,13 @@ import (
 	"text/tabwriter"
 	"time"
 
-	"github.com/AlexRudyak/pktreplay/internal/conv"
-	"github.com/AlexRudyak/pktreplay/internal/filter"
-	"github.com/AlexRudyak/pktreplay/internal/pcapio"
-	"github.com/AlexRudyak/pktreplay/internal/stats"
+	"github.com/AlexRudyak/pcapreplay/internal/conv"
+	"github.com/AlexRudyak/pcapreplay/internal/filter"
+	"github.com/AlexRudyak/pcapreplay/internal/pcapio"
+	"github.com/AlexRudyak/pcapreplay/internal/stats"
 )
 
-// cmdConversations implements "pktreplay conversations".
+// cmdConversations implements "pcapreplay conversations".
 func cmdConversations(args []string) error {
 	fs := flag.NewFlagSet("conversations", flag.ExitOnError)
 	var rf rangeFlags
@@ -26,12 +26,12 @@ func cmdConversations(args []string) error {
 	top := fs.Int("top", 50, "number of conversations to list (0 = all tracked)")
 	sortBy := fs.String("sort", conv.ByBytes, "sort order: bytes, packets or time (first appearance)")
 	fs.Usage = func() {
-		fmt.Fprint(os.Stderr, `usage: pktreplay conversations [flags] <capture>
+		fmt.Fprint(os.Stderr, `usage: pcapreplay conversations [flags] <capture>
 
 Lists the bidirectional conversations in a capture in one streaming pass. The
 SELECTOR column can be pasted into 'replay -conv', e.g.
 
-  pktreplay replay -mode udp -conv "udp/10.0.0.1:5000/10.0.0.2:53,server-ip=172.16.0.9" capture.pcap
+  pcapreplay replay -mode udp -conv "udp/10.0.0.1:5000/10.0.0.2:53,server-ip=172.16.0.9" capture.pcap
 
 Flags:
 `)

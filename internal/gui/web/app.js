@@ -1,5 +1,5 @@
 "use strict";
-// pktreplay GUI. Flow: open a capture -> pick conversations -> say how/where/how fast -> Send.
+// pcapreplay GUI. Flow: open a capture -> pick conversations -> say how/where/how fast -> Send.
 // All server-supplied text is inserted with textContent, never innerHTML.
 
 const $ = (s) => document.querySelector(s);
@@ -65,9 +65,9 @@ function show(screen) {
 }
 
 // ---------- recent files ----------
-function recents() { try { return JSON.parse(localStorage.getItem("pktreplay.recent") || "[]"); } catch (_) { return []; } }
-function addRecent(p) { try { localStorage.setItem("pktreplay.recent", JSON.stringify([p, ...recents().filter((x) => x !== p)].slice(0, 6))); } catch (_) { /* storage unavailable */ } }
-function saveSession() { try { localStorage.setItem("pktreplay.session", JSON.stringify({ path: S.path, limits: S.limits })); } catch (_) { /* ignore */ } }
+function recents() { try { return JSON.parse(localStorage.getItem("pcapreplay.recent") || "[]"); } catch (_) { return []; } }
+function addRecent(p) { try { localStorage.setItem("pcapreplay.recent", JSON.stringify([p, ...recents().filter((x) => x !== p)].slice(0, 6))); } catch (_) { /* storage unavailable */ } }
+function saveSession() { try { localStorage.setItem("pcapreplay.session", JSON.stringify({ path: S.path, limits: S.limits })); } catch (_) { /* ignore */ } }
 
 function fileList(ul, items) {
   ul.replaceChildren();
@@ -533,7 +533,7 @@ $("#againBtn").onclick = () => { S.view = "cfg"; showRun(); };
 function showRun() { $("#cfgView").hidden = S.view !== "cfg"; $("#runView").hidden = S.view !== "run"; }
 
 async function elevate() {
-  try { await api("/api/elevate", {}); toast("A new pktreplay window is opening with administrator rights. You can close this tab."); }
+  try { await api("/api/elevate", {}); toast("A new pcapreplay window is opening with administrator rights. You can close this tab."); }
   catch (e) { toast(e.message); }
 }
 $("#elevateBtn").onclick = elevate; $("#elevateBtn2").onclick = elevate;
@@ -962,7 +962,7 @@ $("#hsClear").onclick = () => armConfirm($("#hsClear"), "Click again: delete all
     b.textContent = S.info.elevated ? "Administrator" : "Standard user: test runs only";
     b.className = "badge " + (S.info.elevated ? "ok" : "warn");
   } catch (e) { toast(e.message); }
-  try { const ses = JSON.parse(localStorage.getItem("pktreplay.session") || "null"); if (ses && ses.path) { S.path = ses.path; S.analysisPath = ses.path; S.limits = ses.limits || S.limits; } } catch (_) { /* none */ }
+  try { const ses = JSON.parse(localStorage.getItem("pcapreplay.session") || "null"); if (ses && ses.path) { S.path = ses.path; S.analysisPath = ses.path; S.limits = ses.limits || S.limits; } } catch (_) { /* none */ }
   renderWelcomeLists();
   show("welcome");
   refreshHistoryCount();

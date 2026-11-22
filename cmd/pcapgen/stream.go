@@ -7,7 +7,7 @@ import (
 	"net/netip"
 	"os"
 
-	"github.com/AlexRudyak/pktreplay/internal/craft"
+	"github.com/AlexRudyak/pcapreplay/internal/craft"
 )
 
 // genStream writes one TCP conversation: optionally a SYN/SYN-ACK/ACK

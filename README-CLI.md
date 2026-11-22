@@ -1,11 +1,11 @@
-# pktreplay command-line reference
+# pcapreplay command-line reference
 
-`pktreplay` analyses and replays PCAP / PCAPNG captures. This document covers every command and flag of the
+`pcapreplay` analyses and replays PCAP / PCAPNG captures. This document covers every command and flag of the
 command-line tool. For the graphical interface see [README.md](README.md); for internals see
 [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md).
 
 ```
-pktreplay <command> [flags] <capture>
+pcapreplay <command> [flags] <capture>
 
   stats           one-pass summary statistics
   conversations   list the bidirectional conversations (alias: convs)
@@ -15,7 +15,7 @@ pktreplay <command> [flags] <capture>
   version         print the version
 ```
 
-Run `pktreplay <command> -h` for the built-in flag list. Flags may be written `-flag value` or `-flag=value`
+Run `pcapreplay <command> -h` for the built-in flag list. Flags may be written `-flag value` or `-flag=value`
 (Go syntax; `--flag` also works). **Flags must come before the capture file name.** Boolean flags
 (`-burst`, `-vv`, ...) need no value; write `-record-rx=false` to turn a default-on boolean off.
 
@@ -59,11 +59,11 @@ you type them in, so adding a payload condition costs little for packets already
 Combine terms with `AND` / `OR` / `NOT` (or `&&` / `||` / `!`) and parentheses. Operators are case-insensitive.
 
 ```bash
-pktreplay stats -filter "src_ip == 10.0.0.0/8 AND dst_port == 443" trace.pcap
-pktreplay stats -filter "proto == udp AND NOT dst_port in 1-1023" trace.pcap
-pktreplay stats -filter "(dst_port == 80 OR dst_port == 8080) AND payload contains \"POST \"" trace.pcap
-pktreplay stats -filter "tcp_flags == syn" trace.pcap                       # connection attempts
-pktreplay stats -filter "payload ~ \"User-Agent: (curl|wget)\"" trace.pcap
+pcapreplay stats -filter "src_ip == 10.0.0.0/8 AND dst_port == 443" trace.pcap
+pcapreplay stats -filter "proto == udp AND NOT dst_port in 1-1023" trace.pcap
+pcapreplay stats -filter "(dst_port == 80 OR dst_port == 8080) AND payload contains \"POST \"" trace.pcap
+pcapreplay stats -filter "tcp_flags == syn" trace.pcap                       # connection attempts
+pcapreplay stats -filter "payload ~ \"User-Agent: (curl|wget)\"" trace.pcap
 ```
 
 Quote the whole expression for your shell. Inside it, string literals use double quotes (escape them as
@@ -77,7 +77,7 @@ A malformed filter stops the command with a message before any packet is process
 One streaming pass that prints a summary of the capture.
 
 ```
-pktreplay stats [flags] <capture>
+pcapreplay stats [flags] <capture>
 ```
 
 | Flag | Default | Explanation |
@@ -97,9 +97,9 @@ Top talkers use a bounded heavy-hitter sketch (16 384 keys), so memory stays con
 very small hosts in a huge capture can be approximated (the `+a..b B` column gives the error bound).
 
 ```bash
-pktreplay stats samples/sample-mixed.pcap
-pktreplay stats -progress -top 25 -filter "proto == tcp" huge.pcapng
-pktreplay stats -index huge.pcap.idx -start 50000000 -count 1000 huge.pcap   # a slice, no full scan
+pcapreplay stats samples/sample-mixed.pcap
+pcapreplay stats -progress -top 25 -filter "proto == tcp" huge.pcapng
+pcapreplay stats -index huge.pcap.idx -start 50000000 -count 1000 huge.pcap   # a slice, no full scan
 ```
 
 ---
@@ -111,7 +111,7 @@ endpoints, so both directions of an exchange are one row. Use it to decide what 
 `SELECTOR` into [`replay -conv`](#per-conversation-rewrites--conv--only-conv).
 
 ```
-pktreplay conversations [flags] <capture>      (alias: convs)
+pcapreplay conversations [flags] <capture>      (alias: convs)
 ```
 
 | Flag | Default | Explanation |
@@ -135,7 +135,7 @@ Conversation tracking is bounded in memory; if a capture holds more distinct con
 allows, the least active ones are dropped and the summary line says so.
 
 ```
-$ pktreplay conversations samples/sample-mixed.pcap
+$ pcapreplay conversations samples/sample-mixed.pcap
 #  SELECTOR (proto/client/server)           PKTS  C>S  S>C  BYTES  DURATION  STATE
 1  tcp/192.168.1.50:51234/192.168.1.10:80   10    5    5    927    7ms       closed
 2  icmp/192.168.1.50/192.168.1.1            6     3    3    588    2.004s    -
@@ -152,7 +152,7 @@ reading the ones before it. Worth building once for captures of many millions of
 replay in ranges.
 
 ```
-pktreplay index [flags] <capture>
+pcapreplay index [flags] <capture>
 ```
 
 | Flag | Default | Explanation |
@@ -164,8 +164,8 @@ The index is tied to the capture it was built from. If the capture changes, rebu
 `-index FILE` on `stats`, `conversations` and `replay`.
 
 ```bash
-pktreplay index huge.pcap                 # writes huge.pcap.idx
-pktreplay stats -index huge.pcap.idx -start 50000000 -count 1000 huge.pcap
+pcapreplay index huge.pcap                 # writes huge.pcap.idx
+pcapreplay stats -index huge.pcap.idx -start 50000000 -count 1000 huge.pcap
 ```
 
 ---
@@ -175,7 +175,7 @@ pktreplay stats -index huge.pcap.idx -start 50000000 -count 1000 huge.pcap
 Reads a capture, selects and rewrites packets, and transmits them with controlled timing.
 
 ```
-pktreplay replay -mode tcp|udp [flags] <capture>
+pcapreplay replay -mode tcp|udp [flags] <capture>
 ```
 
 Replaying can send real traffic. **Only use it on networks you own or are authorised to test**, and prefer a
@@ -254,8 +254,8 @@ give the rule its own `replace=` if it needs one. Two rules for the same convers
 
 ```bash
 # find the conversation, then move only the DNS exchange to another resolver
-pktreplay conversations capture.pcap
-pktreplay replay -mode udp -only-conv \
+pcapreplay conversations capture.pcap
+pcapreplay replay -mode udp -only-conv \
    -conv "udp/192.168.1.50:40000/192.168.1.1:53,server-ip=10.50.0.9,server-port=5353" capture.pcap
 ```
 
@@ -299,10 +299,10 @@ TCP-only flags are rejected in `-mode udp`.
 | `-backend auto\|null` | `auto` | `auto`: inject on the real network (Linux `AF_PACKET`+`sendmmsg`, Windows WinDivert). `null`: **dry run**: reads, filters and rewrites without sending, needs no privileges, ideal for checking a command or benchmarking. |
 | `-iface NAME` | route lookup | Linux: egress interface (e.g. `eth0`). By default chosen from the routing table. |
 | `-ifindex N` | route lookup | Windows: WinDivert network-interface index to send on. |
-| `-no-firewall` | off | Linux, TCP mode: do **not** install the temporary firewall rule that drops the kernel's automatic RST. The kernel does not know about the injected connection and would reset it; pktreplay normally adds an `nftables`/`iptables` rule for the duration and removes it afterwards. Use this flag only if you manage that rule yourself. On Windows the equivalent guard is part of the WinDivert filter. |
+| `-no-firewall` | off | Linux, TCP mode: do **not** install the temporary firewall rule that drops the kernel's automatic RST. The kernel does not know about the injected connection and would reset it; pcapreplay normally adds an `nftables`/`iptables` rule for the duration and removes it afterwards. Use this flag only if you manage that rule yourself. On Windows the equivalent guard is part of the WinDivert filter. |
 
 Requirements: **Linux** needs root or `CAP_NET_RAW` (plus `CAP_NET_ADMIN` for the firewall rule). **Windows** needs
-an elevated (Administrator) prompt and `WinDivert.dll` + `WinDivert64.sys` (from [basil00/WinDivert](https://github.com/basil00/WinDivert/releases)) next to `pktreplay.exe` (the installer
+an elevated (Administrator) prompt and `WinDivert.dll` + `WinDivert64.sys` (from [basil00/WinDivert](https://github.com/basil00/WinDivert/releases)) next to `pcapreplay.exe` (the installer
 includes them when available); **loopback targets (127.0.0.1) are not supported on Windows**. On Linux, loopback
 works. `-backend null` needs nothing.
 
@@ -342,7 +342,7 @@ cleanly: the queue is drained, the firewall rule removed and any recording flush
 ## gui
 
 ```
-pktreplay gui [flags]
+pcapreplay gui [flags]
 ```
 
 Starts the local web interface (see [README.md](README.md#gui)) and opens it in your browser.
@@ -351,13 +351,13 @@ Starts the local web interface (see [README.md](README.md#gui)) and opens it in 
 |---|---|---|
 | `-no-open` | off | Do not launch a browser; just print the URL (it contains the private access token). |
 | `-addr HOST:PORT` | `127.0.0.1:0` | Listen address. **Loopback only**: any other address is refused. Port `0` picks a free port. |
-| `-data-dir DIR` | per-user folder | Where run history and the pcap library are stored. Default `%LOCALAPPDATA%\pktreplay\history` (Windows) or `~/.local/share/pktreplay/history` (Linux); override globally with the `PKTREPLAY_DATA` environment variable. |
+| `-data-dir DIR` | per-user folder | Where run history and the pcap library are stored. Default `%LOCALAPPDATA%\pcapreplay\history` (Windows) or `~/.local/share/pcapreplay/history` (Linux); override globally with the `PCAPREPLAY_DATA` environment variable. |
 | `-no-history` | off | Do not record or show any history. |
 
 Run with no flags, a second launch for the same user reopens the already-running interface instead of starting
 another process (a record of the running instance is kept in `gui-instance.json` next to the history folder).
-`pktreplay-gui.exe` (the windowless Windows build) is the same program and opens the GUI when started without
-arguments; its log is `%LOCALAPPDATA%\pktreplay\pktreplay-gui.log`.
+`pcapreplay-gui.exe` (the windowless Windows build) is the same program and opens the GUI when started without
+arguments; its log is `%LOCALAPPDATA%\pcapreplay\pcapreplay-gui.log`.
 
 ---
 
@@ -382,10 +382,10 @@ command output is printed. Diagnostics go to **stderr** (so they never mix with 
 | `-log-file FILE` | | Also append the diagnostic lines to FILE (still shown on stderr). Handy for sharing a trace. |
 
 ```bash
-pktreplay replay -mode udp -backend null -v capture.pcap                  # what will happen
-pktreplay replay -mode tcp -dst-ip 10.20.0.5 -vv capture.pcap             # TCP handshake and per-segment detail
-pktreplay replay -mode udp -backend null -vvv -count 20 capture.pcap      # decision for each of the first packets
-pktreplay stats -log-level debug -log-file stats.log huge.pcap            # keep a log file
+pcapreplay replay -mode udp -backend null -v capture.pcap                  # what will happen
+pcapreplay replay -mode tcp -dst-ip 10.20.0.5 -vv capture.pcap             # TCP handshake and per-segment detail
+pcapreplay replay -mode udp -backend null -vvv -count 20 capture.pcap      # decision for each of the first packets
+pcapreplay stats -log-level debug -log-file stats.log huge.pcap            # keep a log file
 ```
 
 Logging costs nothing when off, and the per-packet levels are checked once outside the packet loop, so quiet
@@ -397,37 +397,37 @@ runs keep their full speed. The old `-v` of `replay` (TCP trace) is now part of 
 
 ```bash
 # What is in this capture?
-pktreplay stats capture.pcap
-pktreplay conversations -sort packets -top 20 capture.pcap
+pcapreplay stats capture.pcap
+pcapreplay conversations -sort packets -top 20 capture.pcap
 
 # Dry run first: what would be sent, and how fast could this machine do it?
-pktreplay replay -mode udp -backend null -burst -dst-ip 10.9.9.9 capture.pcap
+pcapreplay replay -mode udp -backend null -burst -dst-ip 10.9.9.9 capture.pcap
 
 # UDP, original timing, to another host/port
-sudo pktreplay replay -mode udp -filter "proto == udp AND dst_port == 5060" \
+sudo pcapreplay replay -mode udp -filter "proto == udp AND dst_port == 5060" \
      -dst-ip 10.20.0.5 -dst-port 5060 capture.pcap
 
 # UDP at 100 Mbit/s, repeated 10 times, with a payload substitution
-sudo pktreplay replay -mode udp -mbps 100 -loop 10 -replace "tenant-a=>tenant-b" capture.pcap
+sudo pcapreplay replay -mode udp -mbps 100 -loop 10 -replace "tenant-a=>tenant-b" capture.pcap
 
 # Twice the original speed but never wait more than 100 ms for a gap
-sudo pktreplay replay -mode udp -speed 2 -max-gap 100ms capture.pcap
+sudo pcapreplay replay -mode udp -speed 2 -max-gap 100ms capture.pcap
 
 # A real TCP connection (the capture contains the handshake)
-sudo pktreplay replay -mode tcp -filter "dst_port == 8080" -dst-ip 10.20.0.5 -v capture.pcap
+sudo pcapreplay replay -mode tcp -filter "dst_port == 8080" -dst-ip 10.20.0.5 -v capture.pcap
 
 # Capture starts mid-connection; begin 1500 bytes into the client stream
-sudo pktreplay replay -mode tcp -dst-ip 10.20.0.5 -dst-port 8080 -tcp-skip-bytes 1500 midstream.pcap
+sudo pcapreplay replay -mode tcp -dst-ip 10.20.0.5 -dst-port 8080 -tcp-skip-bytes 1500 midstream.pcap
 
 # Change one conversation only; leave everything else as captured
-sudo pktreplay replay -mode udp \
+sudo pcapreplay replay -mode udp \
      -conv "udp/192.168.1.50:40000/192.168.1.1:53,server-ip=10.50.0.9" capture.pcap
 
 # Save exactly what went on the wire (and the replies) for later comparison in Wireshark
-sudo pktreplay replay -mode tcp -dst-ip 10.20.0.5 -record sent.pcapng capture.pcap
+sudo pcapreplay replay -mode tcp -dst-ip 10.20.0.5 -record sent.pcapng capture.pcap
 
 # Windows (elevated PowerShell)
-.\pktreplay.exe replay -mode tcp -dst-ip 10.20.0.5 -dst-port 8080 capture.pcap
+.\pcapreplay.exe replay -mode tcp -dst-ip 10.20.0.5 -dst-port 8080 capture.pcap
 ```
 
 ---
@@ -445,7 +445,7 @@ sudo pktreplay replay -mode tcp -dst-ip 10.20.0.5 -record sent.pcapng capture.pc
 | `tcp handshake timed out: no SYN-ACK from server` | Target unreachable, wrong IP/port, a firewall dropping the SYN, or (Linux) wrong `-iface`. Try `-handshake-timeout 15s -vv`. |
 | `connection refused by server (RST in reply to SYN)` | Nothing listens on that port. |
 | `server stopped acknowledging data` | The server stopped ACKing (window closed or it hung). Check the server; try `-tcp-skip-bytes` or a slower pacing. |
-| Windows: access denied / driver not found | Run elevated and make sure `WinDivert.dll` and `WinDivert64.sys` sit next to `pktreplay.exe`. Antivirus products sometimes block WinDivert. |
+| Windows: access denied / driver not found | Run elevated and make sure `WinDivert.dll` and `WinDivert64.sys` sit next to `pcapreplay.exe`. Antivirus products sometimes block WinDivert. |
 | Linux: operation not permitted | Run with `sudo` or grant `CAP_NET_RAW`/`CAP_NET_ADMIN`. |
 | Windows: nothing arrives at `127.0.0.1` | Loopback injection is not supported by WinDivert; use a real interface address of the machine. |
-| Double-clicking the exe shows a window that vanishes | Starting with no arguments opens the GUI; errors are written to `%LOCALAPPDATA%\pktreplay\pktreplay-gui.log`. |
+| Double-clicking the exe shows a window that vanishes | Starting with no arguments opens the GUI; errors are written to `%LOCALAPPDATA%\pcapreplay\pcapreplay-gui.log`. |

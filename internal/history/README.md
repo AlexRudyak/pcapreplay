@@ -13,8 +13,8 @@ the standard library only (no database dependency).
   packets/<run>.pcapng  optional copy of the packets that were transmitted
 ```
 
-Default folder: `%LOCALAPPDATA%\pktreplay\history` (Windows), `~/.local/share/pktreplay/history` (Linux) or the macOS
-equivalent; override with `PKTREPLAY_DATA` or `pktreplay gui -data-dir`. Files are private to the user (0600/0700).
+Default folder: `%LOCALAPPDATA%\pcapreplay\history` (Windows), `~/.local/share/pcapreplay/history` (Linux) or the macOS
+equivalent; override with `PCAPREPLAY_DATA` or `pcapreplay gui -data-dir`. Files are private to the user (0600/0700).
 
 ## The log
 
@@ -63,4 +63,4 @@ data folder.
 `store_test.go` and `library_test.go` cover the log, crash recovery, compaction, retention, search, export, hashing,
 deduplication, references, LRU pruning and id validation.
 
-Used by: `gui`, `cmd/pktreplay`.
+Used by: `gui`, `cmd/pcapreplay`.

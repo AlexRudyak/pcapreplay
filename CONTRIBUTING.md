@@ -1,4 +1,4 @@
-# Contributing to pktreplay
+# Contributing to pcapreplay
 
 Thanks for your interest. This project is small, dependency-free and meant to stay easy to read, so a few ground rules
 keep it that way.
@@ -17,11 +17,11 @@ keep it that way.
 ## Getting started
 
 ```bash
-git clone https://github.com/AlexRudyak/pktreplay.git
-cd pktreplay
+git clone https://github.com/AlexRudyak/pcapreplay.git
+cd pcapreplay
 go build ./...
 go test ./...
-go run ./cmd/pktreplay gui          # try the interface
+go run ./cmd/pcapreplay gui          # try the interface
 ```
 
 Read the top-level [README](README.md) for the big picture, [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md) for the design,

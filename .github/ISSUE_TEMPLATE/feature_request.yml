@@ -11,4 +11,4 @@ body:
   - type: textarea
     id: idea
     attributes:
-      label: What would you like pktreplay to do?
+      label: What would you like pcapreplay to do?

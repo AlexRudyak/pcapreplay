@@ -1,7 +1,7 @@
 # internal/gui
 
 The local **web interface**: an HTTP server (standard library only) with a job manager and an embedded static frontend.
-Started by `pktreplay gui`.
+Started by `pcapreplay gui`.
 
 ```go
 srv, _ := gui.NewWithOptions("127.0.0.1:0", version, gui.Options{DataDir: dir})
@@ -21,8 +21,8 @@ srv.Serve()
 * State-changing requests must carry a same-origin `Origin` (when present) and `Content-Type: application/json`, so
   other web pages cannot drive the tool; request bodies are limited to 1 MiB.
 * Security headers: `Content-Security-Policy`, `X-Content-Type-Options`, `Cache-Control: no-store`.
-* On a successful token exchange the response carries `X-Pktreplay: gui`, which lets a second launch recognise a live
-  instance (see `cmd/pktreplay`).
+* On a successful token exchange the response carries `X-Pcapreplay: gui`, which lets a second launch recognise a live
+  instance (see `cmd/pcapreplay`).
 
 ## Job manager (`jobs.go`)
 

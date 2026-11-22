@@ -27,10 +27,10 @@ the target address (for route/MAC discovery), MAC overrides, the WinDivert inter
 A raw-injected TCP connection is unknown to the host's TCP stack, which answers the server's replies with RST and
 kills the session. `Guard(flow)` prevents that and starts delivering the flow's inbound packets to `Recv`:
 
-* **Linux:** a temporary `nft` table (`pktreplay_<pid>`) dropping the *outbound* RSTs of exactly that 4-tuple, falling
+* **Linux:** a temporary `nft` table (`pcapreplay_<pid>`) dropping the *outbound* RSTs of exactly that 4-tuple, falling
   back to `iptables`/`ip6tables`; a second `AF_PACKET` socket filtered to the tuple receives the replies (frames the
   kernel itself sent, `PACKET_OUTGOING`, are ignored). `release()` removes the rule. `-no-firewall` skips the rule.
-* **Windows:** the flow's *inbound* segments are **diverted** to pktreplay so the stack never sees them (and never
+* **Windows:** the flow's *inbound* segments are **diverted** to pcapreplay so the stack never sees them (and never
   resets); any outbound RST of the flow is captured and discarded (`WinDivertGuardFilter`).
 
 ## Requirements
@@ -45,4 +45,4 @@ rejects it. See the top-level README for setup.
 guard filter text, and the friendly errors) run everywhere they compile. **The WinDivert raw-injection path has not been
 exercised against the driver by the author**; the Linux path is verified end to end by `scripts/e2e-*.sh`.
 
-Used by: `replay`, `record`, `gui`, `cmd/pktreplay`.
+Used by: `replay`, `record`, `gui`, `cmd/pcapreplay`.

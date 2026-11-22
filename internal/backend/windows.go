@@ -83,7 +83,7 @@ func (w *Windows) Open(o Options) error {
 	}
 	w.dll = syscall.NewLazyDLL(name)
 	if err := w.dll.Load(); err != nil {
-		return fmt.Errorf("cannot load WinDivert.dll (place WinDivert.dll and WinDivert64.sys next to pktreplay.exe): %w", err)
+		return fmt.Errorf("cannot load WinDivert.dll (place WinDivert.dll and WinDivert64.sys next to pcapreplay.exe): %w", err)
 	}
 	w.pOpen = w.dll.NewProc("WinDivertOpen")
 	w.pRecv = w.dll.NewProc("WinDivertRecv")

@@ -1,6 +1,6 @@
 # Third-party software
 
-pktreplay itself has **no Go dependencies** (standard library only). The following external component is used at run
+pcapreplay itself has **no Go dependencies** (standard library only). The following external component is used at run
 time on Windows and is **not part of this repository**.
 
 ## WinDivert
@@ -23,7 +23,7 @@ How it is obtained:
 * `installer/fetch-windivert.ps1` downloads the official release asset from the upstream GitHub repository, verifies
   **pinned SHA-256 hashes**, the driver's Authenticode signature and the license text, and stages the files so the
   Windows installer can include them together with `WinDivert-LICENSE.txt`.
-* Or place the two files next to `pktreplay.exe` yourself after downloading them from the official releases.
+* Or place the two files next to `pcapreplay.exe` yourself after downloading them from the official releases.
 
 Licensing note: the binaries must be redistributed **unmodified** together with their license text. Some antivirus
 products flag WinDivert because the same technique is abused by malware; only use binaries you downloaded from the

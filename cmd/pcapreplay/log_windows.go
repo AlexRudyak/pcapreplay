@@ -16,7 +16,7 @@ var logPath string
 // initLogging gives the windowless GUI build somewhere to write: without a
 // console, errors and Go runtime panics would otherwise vanish. stderr (both the
 // os.Stderr file and the process's standard error handle, which the Go runtime
-// uses for fatal errors) is pointed at %LOCALAPPDATA%\pktreplay\pktreplay-gui.log.
+// uses for fatal errors) is pointed at %LOCALAPPDATA%\pcapreplay\pcapreplay-gui.log.
 func initLogging() {
 	if defaultCommand != "gui" {
 		return
@@ -25,11 +25,11 @@ func initLogging() {
 	if err != nil {
 		return
 	}
-	dir = filepath.Join(dir, "pktreplay")
+	dir = filepath.Join(dir, "pcapreplay")
 	if os.MkdirAll(dir, 0o755) != nil {
 		return
 	}
-	p := filepath.Join(dir, "pktreplay-gui.log")
+	p := filepath.Join(dir, "pcapreplay-gui.log")
 	if fi, err := os.Stat(p); err == nil && fi.Size() > 1<<20 {
 		os.Remove(p) // keep the log small
 	}
@@ -41,5 +41,5 @@ func initLogging() {
 	syscall.NewLazyDLL("kernel32.dll").NewProc("SetStdHandle").Call(stdErrorHandle, f.Fd())
 	os.Stderr = f
 	logPath = p
-	fmt.Fprintf(f, "\n=== %s pktreplay %s started (pid %d, args %q) ===\n", time.Now().Format(time.RFC3339), version, os.Getpid(), os.Args[1:])
+	fmt.Fprintf(f, "\n=== %s pcapreplay %s started (pid %d, args %q) ===\n", time.Now().Format(time.RFC3339), version, os.Getpid(), os.Args[1:])
 }

@@ -12,9 +12,9 @@ import (
 	"strings"
 	"sync"
 
-	"github.com/AlexRudyak/pktreplay/internal/checksum"
-	"github.com/AlexRudyak/pktreplay/internal/decode"
-	"github.com/AlexRudyak/pktreplay/internal/pcapio"
+	"github.com/AlexRudyak/pcapreplay/internal/checksum"
+	"github.com/AlexRudyak/pcapreplay/internal/decode"
+	"github.com/AlexRudyak/pcapreplay/internal/pcapio"
 )
 
 // MaxFrame bounds frame size after payload rewriting.

@@ -1,6 +1,6 @@
-// Command mkicon renders the pktreplay icon (a white waveform on a rounded blue
+// Command mkicon renders the pcapreplay icon (a white waveform on a rounded blue
 // square) into a multi-resolution Windows .ico file using only the standard
-// library. Usage: mkicon -o pktreplay.ico
+// library. Usage: mkicon -o pcapreplay.ico
 package main
 
 import (
@@ -82,7 +82,7 @@ func render(size int) *image.NRGBA {
 
 // main renders the icon at each standard size and writes them into one .ico file.
 func main() {
-	out := flag.String("o", "pktreplay.ico", "output .ico file")
+	out := flag.String("o", "pcapreplay.ico", "output .ico file")
 	pngOut := flag.String("png", "", "also write the 256x256 frame as a PNG (for previews and docs)")
 	flag.Parse()
 	if *pngOut != "" {

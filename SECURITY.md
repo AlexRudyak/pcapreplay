@@ -27,5 +27,5 @@ otherwise.
 
 * The GUI listens on loopback only and requires a random per-launch token (`internal/gui`).
 * Capture files are treated as untrusted input throughout (`internal/pcapio`, `internal/decode`).
-* pktreplay is a tool for transmitting traffic. Misuse (replaying onto networks you do not control) is not a
+* pcapreplay is a tool for transmitting traffic. Misuse (replaying onto networks you do not control) is not a
   vulnerability of the software.

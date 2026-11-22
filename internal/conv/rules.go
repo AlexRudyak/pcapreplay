@@ -7,8 +7,8 @@ import (
 	"strconv"
 	"strings"
 
-	"github.com/AlexRudyak/pktreplay/internal/decode"
-	"github.com/AlexRudyak/pktreplay/internal/mutate"
+	"github.com/AlexRudyak/pcapreplay/internal/decode"
+	"github.com/AlexRudyak/pcapreplay/internal/mutate"
 )
 
 // Rule rewrites one conversation. Unlike the global packet-level rewrite it is
@@ -133,7 +133,7 @@ func (s *Set) Lookup(in *decode.Info) (rule *Rule, rw *mutate.Rewrite) {
 //
 //	SELECTOR[,client-ip=IP][,client-port=N][,server-ip=IP][,server-port=N][,replace=old=>new]...
 //
-// where SELECTOR is "proto/client/server" as printed by `pktreplay conversations`.
+// where SELECTOR is "proto/client/server" as printed by `pcapreplay conversations`.
 func ParseRule(s string) (Rule, error) {
 	parts := strings.Split(s, ",")
 	k, client, err := ParseSelector(parts[0])

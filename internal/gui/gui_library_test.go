@@ -10,7 +10,7 @@ import (
 	"testing"
 	"time"
 
-	"github.com/AlexRudyak/pktreplay/internal/history"
+	"github.com/AlexRudyak/pcapreplay/internal/history"
 )
 
 // waitPcapLinked waits for the background library registration of the newest run.

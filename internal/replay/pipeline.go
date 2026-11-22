@@ -14,14 +14,14 @@ import (
 	"sync/atomic"
 	"time"
 
-	"github.com/AlexRudyak/pktreplay/internal/backend"
-	"github.com/AlexRudyak/pktreplay/internal/conv"
-	"github.com/AlexRudyak/pktreplay/internal/decode"
-	"github.com/AlexRudyak/pktreplay/internal/filter"
-	"github.com/AlexRudyak/pktreplay/internal/logx"
-	"github.com/AlexRudyak/pktreplay/internal/mutate"
-	"github.com/AlexRudyak/pktreplay/internal/pace"
-	"github.com/AlexRudyak/pktreplay/internal/pcapio"
+	"github.com/AlexRudyak/pcapreplay/internal/backend"
+	"github.com/AlexRudyak/pcapreplay/internal/conv"
+	"github.com/AlexRudyak/pcapreplay/internal/decode"
+	"github.com/AlexRudyak/pcapreplay/internal/filter"
+	"github.com/AlexRudyak/pcapreplay/internal/logx"
+	"github.com/AlexRudyak/pcapreplay/internal/mutate"
+	"github.com/AlexRudyak/pcapreplay/internal/pace"
+	"github.com/AlexRudyak/pcapreplay/internal/pcapio"
 )
 
 // Transport is the user-selected replay mode.

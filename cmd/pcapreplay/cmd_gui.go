@@ -11,17 +11,17 @@ import (
 	"os/signal"
 	"runtime"
 
-	"github.com/AlexRudyak/pktreplay/internal/gui"
-	"github.com/AlexRudyak/pktreplay/internal/history"
+	"github.com/AlexRudyak/pcapreplay/internal/gui"
+	"github.com/AlexRudyak/pcapreplay/internal/history"
 )
 
-// cmdGUI implements "pktreplay gui": it reopens a running instance when there is one, otherwise
+// cmdGUI implements "pcapreplay gui": it reopens a running instance when there is one, otherwise
 // starts the server, registers the instance and opens the browser.
 func cmdGUI(args []string) error {
 	fs := flag.NewFlagSet("gui", flag.ExitOnError)
 	addr := fs.String("addr", "127.0.0.1:0", "listen address (loopback only; port 0 picks a free port)")
 	noOpen := fs.Bool("no-open", false, "do not open the browser automatically")
-	dataDir := fs.String("data-dir", "", "where the run history is stored (default: per-user data folder, or $PKTREPLAY_DATA)")
+	dataDir := fs.String("data-dir", "", "where the run history is stored (default: per-user data folder, or $PCAPREPLAY_DATA)")
 	noHistory := fs.Bool("no-history", false, "do not record or show a history of sent packets")
 	fs.Parse(args)
 
@@ -31,9 +31,9 @@ func cmdGUI(args []string) error {
 	if shared {
 		if u, ok := runningInstance(gui.IsElevated()); ok {
 			if !*noOpen && !openBrowser(u) {
-				reportError("pktreplay is already running.\nOpen this address yourself (it contains a private access token):\n\n" + u)
+				reportError("pcapreplay is already running.\nOpen this address yourself (it contains a private access token):\n\n" + u)
 			}
-			fmt.Fprintln(os.Stderr, "pktreplay GUI is already running; reopened it.")
+			fmt.Fprintln(os.Stderr, "pcapreplay GUI is already running; reopened it.")
 			return nil
 		}
 	}
@@ -65,14 +65,14 @@ func cmdGUI(args []string) error {
 	if shared {
 		defer registerInstance(url, gui.IsElevated())()
 	}
-	windowless := defaultCommand != "" // pktreplay-gui.exe: no console, output goes to the log file
+	windowless := defaultCommand != "" // pcapreplay-gui.exe: no console, output goes to the log file
 	if windowless {
 		// Keep the access token out of the log file.
 		fmt.Fprintf(os.Stderr, "GUI listening on loopback only (elevated: %v)\n", gui.IsElevated())
 	} else {
-		fmt.Fprintf(os.Stderr, "pktreplay GUI listening on loopback only (administrator: %v).\nOpen: %s\n(the URL contains a private access token; Ctrl-C to quit)\n", gui.IsElevated(), url)
+		fmt.Fprintf(os.Stderr, "pcapreplay GUI listening on loopback only (administrator: %v).\nOpen: %s\n(the URL contains a private access token; Ctrl-C to quit)\n", gui.IsElevated(), url)
 		if ownConsole {
-			fmt.Fprintln(os.Stderr, "Leave this window open while you use pktreplay; closing it stops the program.")
+			fmt.Fprintln(os.Stderr, "Leave this window open while you use pcapreplay; closing it stops the program.")
 		}
 	}
 	if !*noOpen && !openBrowser(url) {

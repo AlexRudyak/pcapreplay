@@ -8,11 +8,11 @@ import (
 	"os"
 	"time"
 
-	"github.com/AlexRudyak/pktreplay/internal/decode"
-	"github.com/AlexRudyak/pktreplay/internal/filter"
-	"github.com/AlexRudyak/pktreplay/internal/logx"
-	"github.com/AlexRudyak/pktreplay/internal/pcapio"
-	"github.com/AlexRudyak/pktreplay/internal/stats"
+	"github.com/AlexRudyak/pcapreplay/internal/decode"
+	"github.com/AlexRudyak/pcapreplay/internal/filter"
+	"github.com/AlexRudyak/pcapreplay/internal/logx"
+	"github.com/AlexRudyak/pcapreplay/internal/pcapio"
+	"github.com/AlexRudyak/pcapreplay/internal/stats"
 )
 
 // rangeFlags are shared by commands that can inspect a slice of a capture.
@@ -58,7 +58,7 @@ func (r *rangeFlags) position(rd *pcapio.Reader, capture string) error {
 	return nil
 }
 
-// cmdStats implements "pktreplay stats".
+// cmdStats implements "pcapreplay stats".
 func cmdStats(args []string) error {
 	fs := flag.NewFlagSet("stats", flag.ExitOnError)
 	var rf rangeFlags
@@ -70,7 +70,7 @@ func cmdStats(args []string) error {
 	progress := fs.Bool("progress", false, "print progress to stderr")
 	fs.Parse(args)
 	if fs.NArg() != 1 {
-		return errors.New("usage: pktreplay stats [flags] <capture>")
+		return errors.New("usage: pcapreplay stats [flags] <capture>")
 	}
 	path := fs.Arg(0)
 	lg, closeLog, err := lf.build()
@@ -148,7 +148,7 @@ func cmdStats(args []string) error {
 	return nil
 }
 
-// cmdIndex implements "pktreplay index".
+// cmdIndex implements "pcapreplay index".
 func cmdIndex(args []string) error {
 	fs := flag.NewFlagSet("index", flag.ExitOnError)
 	var lf logFlags
@@ -157,7 +157,7 @@ func cmdIndex(args []string) error {
 	stride := fs.Uint64("stride", pcapio.IndexStride, "packets between index entries")
 	fs.Parse(args)
 	if fs.NArg() != 1 {
-		return errors.New("usage: pktreplay index [flags] <capture>")
+		return errors.New("usage: pcapreplay index [flags] <capture>")
 	}
 	if *out == "" {
 		*out = fs.Arg(0) + ".idx"

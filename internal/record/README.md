@@ -34,4 +34,4 @@ Because it is a wrapper it adds no cost when unused and works unchanged with the
 `record_test.go` records through the null backend, checks counts, directions and timestamps, and re-reads the files
 with `pcapio`.
 
-Used by: `cmd/pktreplay` (`-record`), `gui`.
+Used by: `cmd/pcapreplay` (`-record`), `gui`.

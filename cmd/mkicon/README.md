@@ -1,10 +1,10 @@
 # cmd/mkicon
 
-Renders the pktreplay icon (a white waveform on a rounded blue square) into a **multi-resolution Windows `.ico`** using
+Renders the pcapreplay icon (a white waveform on a rounded blue square) into a **multi-resolution Windows `.ico`** using
 only the standard library: no image editor and no external tool.
 
 ```bash
-go run ./cmd/mkicon -o pktreplay.ico
+go run ./cmd/mkicon -o pcapreplay.ico
 ```
 
 * The shape is defined in a 16 x 16 design space (the same path as the GUI's favicon) and rasterised with 4 x 4

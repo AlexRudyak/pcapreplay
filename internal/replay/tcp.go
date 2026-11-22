@@ -10,13 +10,13 @@ import (
 	"sync/atomic"
 	"time"
 
-	"github.com/AlexRudyak/pktreplay/internal/backend"
-	"github.com/AlexRudyak/pktreplay/internal/conv"
-	"github.com/AlexRudyak/pktreplay/internal/craft"
-	"github.com/AlexRudyak/pktreplay/internal/decode"
-	"github.com/AlexRudyak/pktreplay/internal/mutate"
-	"github.com/AlexRudyak/pktreplay/internal/pace"
-	"github.com/AlexRudyak/pktreplay/internal/pcapio"
+	"github.com/AlexRudyak/pcapreplay/internal/backend"
+	"github.com/AlexRudyak/pcapreplay/internal/conv"
+	"github.com/AlexRudyak/pcapreplay/internal/craft"
+	"github.com/AlexRudyak/pcapreplay/internal/decode"
+	"github.com/AlexRudyak/pcapreplay/internal/mutate"
+	"github.com/AlexRudyak/pcapreplay/internal/pace"
+	"github.com/AlexRudyak/pcapreplay/internal/pcapio"
 )
 
 // Errors reported by the TCP engine.

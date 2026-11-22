@@ -5,6 +5,18 @@ uses [Semantic Versioning](https://semver.org/).
 
 ## [Unreleased]
 
+## [0.2.0]
+
+### Changed
+- **The project is now called `pcapreplay`** (it was `pktreplay`). The command, executables
+  (`pcapreplay.exe`, `pcapreplay-gui.exe`), Go module (`github.com/AlexRudyak/pcapreplay`), installer, documentation and the
+  `PCAPREPLAY_DATA` environment variable were renamed. GitHub redirects the old repository address.
+- An existing history folder from 0.1.x is moved to the new location automatically the first time the GUI starts, and the
+  old `PKTREPLAY_DATA` variable is still honoured. The installer removes the old program files when upgrading.
+
+### Fixed
+- A data race between the analysis job and the GUI status poll (found by the race detector).
+
 ## [0.1.0]
 
 First public version.
@@ -24,5 +36,6 @@ First public version.
 - Windows installer (Inno Setup) with optional bundled WinDivert.
 - Documentation: top-level README, CLI reference, architecture notes and a README for every package.
 
-[Unreleased]: https://github.com/AlexRudyak/pktreplay/compare/v0.1.0...HEAD
-[0.1.0]: https://github.com/AlexRudyak/pktreplay/releases/tag/v0.1.0
+[Unreleased]: https://github.com/AlexRudyak/pcapreplay/compare/v0.2.0...HEAD
+[0.2.0]: https://github.com/AlexRudyak/pcapreplay/compare/v0.1.0...v0.2.0
+[0.1.0]: https://github.com/AlexRudyak/pcapreplay/releases/tag/v0.1.0

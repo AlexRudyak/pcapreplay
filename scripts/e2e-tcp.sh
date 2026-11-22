@@ -1,18 +1,18 @@
 #!/usr/bin/env bash
 # End-to-end stateful TCP replay against a real kernel TCP server (needs root + nftables/iptables).
-# Usage: scripts/e2e-tcp.sh <pktreplay> <stream-syn.pcap> <stream-mid.pcap>
+# Usage: scripts/e2e-tcp.sh <pcapreplay> <stream-syn.pcap> <stream-mid.pcap>
 # Capture files come from:  pcapgen -stream 3000 [-nosyn] -o file.pcap
 set -euo pipefail
 cd "$(dirname "$0")"
 . ./netns.sh
-BIN=${1:?path to pktreplay}
+BIN=${1:?path to pcapreplay}
 SYN=${2:?capture with handshake}
 MID=${3:?mid-stream capture}
 trap ns_down EXIT
 ns_up
 
 N=3000
-# run_case <name> <expected-skip-bytes> <pktreplay args...>
+# run_case <name> <expected-skip-bytes> <pcapreplay args...>
 run_case() {
     local name=$1 skip=$2; shift 2
     echo "=== $name"
@@ -41,7 +41,7 @@ PY
     sleep 0.7
     "$BIN" replay -mode tcp -src-ip "$HOST_IP" -dst-ip "$SRV_IP" -dst-port 9000 "$@"
     wait $srv
-    nft list tables 2>/dev/null | grep -q pktreplay && echo "WARNING: nft table leaked" || echo "firewall rule cleaned up"
+    nft list tables 2>/dev/null | grep -q pcapreplay && echo "WARNING: nft table leaked" || echo "firewall rule cleaned up"
 }
 
 run_case "capture WITH handshake, line rate"            0    -burst "$SYN"

@@ -1,9 +1,9 @@
 ﻿<p align="center">
-  <img src="docs/assets/banner.svg" alt="pktreplay: streaming PCAP analysis and replay with real TCP sessions" width="100%">
+  <img src="docs/assets/banner.svg" alt="pcapreplay: streaming PCAP analysis and replay with real TCP sessions" width="100%">
 </p>
 
 <p align="center">
-  <a href="https://github.com/AlexRudyak/pktreplay/actions/workflows/ci.yml"><img alt="CI" src="https://github.com/AlexRudyak/pktreplay/actions/workflows/ci.yml/badge.svg"></a>
+  <a href="https://github.com/AlexRudyak/pcapreplay/actions/workflows/ci.yml"><img alt="CI" src="https://github.com/AlexRudyak/pcapreplay/actions/workflows/ci.yml/badge.svg"></a>
   <a href="LICENSE"><img alt="License: MIT" src="https://img.shields.io/badge/License-MIT-green.svg"></a>
   <img alt="Go 1.22+" src="https://img.shields.io/badge/Go-1.22%2B-00ADD8?logo=go&logoColor=white">
   <img alt="Platforms: Windows and Linux" src="https://img.shields.io/badge/platform-Windows%20%7C%20Linux-lightgrey">
@@ -31,12 +31,15 @@
   <a href="docs/ARCHITECTURE.md">Architecture</a>
 </p>
 
+> *Formerly called `pktreplay` (versions up to 0.1.x). The old repository address redirects here, and an existing history
+> folder is migrated automatically.*
+
 > **Use it only on networks you own or are authorised to test.** Replaying traffic, especially with rewritten
 > addresses, onto a network you do not control can disrupt other people. See the [disclaimer](#disclaimer).
 
 ---
 
-## Why pktreplay
+## Why pcapreplay
 
 | | |
 |---|---|
@@ -85,33 +88,33 @@ and [internal/history](internal/history/README.md).
 
 ### Windows installer
 
-Download `pktreplay-setup-<version>.exe` from the Releases page (or build it, see [installer](installer/README.md)),
-run it and start **pktreplay** from the Start Menu. Use **pktreplay (Administrator)** when you want to put packets on the
-network; analysis and test runs need no privileges. The installer can also add `pktreplay` to your `PATH`.
+Download `pcapreplay-setup-<version>.exe` from the Releases page (or build it, see [installer](installer/README.md)),
+run it and start **pcapreplay** from the Start Menu. Use **pcapreplay (Administrator)** when you want to put packets on the
+network; analysis and test runs need no privileges. The installer can also add `pcapreplay` to your `PATH`.
 
 ### From source
 
 ```bash
-git clone https://github.com/AlexRudyak/pktreplay.git
-cd pktreplay
-go build -o bin/pktreplay ./cmd/pktreplay        # Go 1.22+, nothing else to download
+git clone https://github.com/AlexRudyak/pcapreplay.git
+cd pcapreplay
+go build -o bin/pcapreplay ./cmd/pcapreplay        # Go 1.22+, nothing else to download
 
-bin/pktreplay gui                                # opens the web interface
-bin/pktreplay stats samples/sample-mixed.pcap    # a first look at the bundled capture
+bin/pcapreplay gui                                # opens the web interface
+bin/pcapreplay stats samples/sample-mixed.pcap    # a first look at the bundled capture
 ```
 
 ### A 60-second tour (no privileges, no network)
 
 ```bash
 # What is in the capture, and who talks to whom?
-pktreplay stats samples/sample-mixed.pcap
-pktreplay conversations samples/sample-mixed.pcap
+pcapreplay stats samples/sample-mixed.pcap
+pcapreplay conversations samples/sample-mixed.pcap
 
 # Dry run: read, filter, rewrite and "send" to the null backend
-pktreplay replay -mode udp -backend null -burst -dst-ip 10.9.9.9 samples/sample-mixed.pcap
+pcapreplay replay -mode udp -backend null -burst -dst-ip 10.9.9.9 samples/sample-mixed.pcap
 
 # See exactly what happens, packet by packet
-pktreplay replay -mode udp -backend null -burst -vvv samples/sample-mixed.pcap
+pcapreplay replay -mode udp -backend null -burst -vvv samples/sample-mixed.pcap
 ```
 
 To send for real, run as root / Administrator (see [Platform setup](#platform-setup)) and drop `-backend null`.
@@ -119,29 +122,29 @@ To send for real, run as root / Administrator (see [Platform setup](#platform-se
 ## Command line
 
 ```
-pktreplay stats          [flags] <capture>   one-pass summary statistics
-pktreplay conversations  [flags] <capture>   list bidirectional conversations
-pktreplay index          [flags] <capture>   build a seek index for very large captures
-pktreplay replay -mode tcp|udp [flags] <capture>
-pktreplay gui            [flags]             local web interface
+pcapreplay stats          [flags] <capture>   one-pass summary statistics
+pcapreplay conversations  [flags] <capture>   list bidirectional conversations
+pcapreplay index          [flags] <capture>   build a seek index for very large captures
+pcapreplay replay -mode tcp|udp [flags] <capture>
+pcapreplay gui            [flags]             local web interface
 ```
 
 ```bash
 # UDP at 100 Mbit/s, looped, with a payload substitution
-sudo pktreplay replay -mode udp -mbps 100 -loop 10 -replace "tenant-a=>tenant-b" capture.pcap
+sudo pcapreplay replay -mode udp -mbps 100 -loop 10 -replace "tenant-a=>tenant-b" capture.pcap
 
 # A real TCP session towards another host
-sudo pktreplay replay -mode tcp -filter "dst_port == 8080" -dst-ip 10.20.0.5 -vv capture.pcap
+sudo pcapreplay replay -mode tcp -filter "dst_port == 8080" -dst-ip 10.20.0.5 -vv capture.pcap
 
 # Mid-stream capture, starting 1500 bytes into the client stream
-sudo pktreplay replay -mode tcp -dst-ip 10.20.0.5 -tcp-skip-bytes 1500 midstream.pcap
+sudo pcapreplay replay -mode tcp -dst-ip 10.20.0.5 -tcp-skip-bytes 1500 midstream.pcap
 
-# Change ONE conversation (copy the selector from `pktreplay conversations`), leave the rest alone
-sudo pktreplay replay -mode udp -only-conv \
+# Change ONE conversation (copy the selector from `pcapreplay conversations`), leave the rest alone
+sudo pcapreplay replay -mode udp -only-conv \
      -conv "udp/192.168.1.50:40000/192.168.1.1:53,server-ip=10.50.0.9,server-port=5353" capture.pcap
 
 # Save exactly what was transmitted (and the target's replies) for Wireshark
-sudo pktreplay replay -mode tcp -dst-ip 10.20.0.5 -record sent.pcapng capture.pcap
+sudo pcapreplay replay -mode tcp -dst-ip 10.20.0.5 -record sent.pcapng capture.pcap
 ```
 
 Every command and flag, the filter language, pacing, TCP options, logging levels (`-v`, `-vv`, `-vvv`) and a
@@ -172,7 +175,7 @@ dropping the kernel's RST; Windows: [WinDivert](https://github.com/basil00/WinDi
 
 ```mermaid
 sequenceDiagram
-    participant C as pktreplay (client)
+    participant C as pcapreplay (client)
     participant S as Live server
     C->>S: SYN (live ISN)
     S-->>C: SYN-ACK
@@ -217,7 +220,7 @@ has its own README explaining its API, invariants and design decisions.
 
 | Package | Responsibility |
 |---|---|
-| [`cmd/pktreplay`](cmd/pktreplay/README.md) | The CLI: command dispatch, flags, logging flags, Windows console/log handling, single-instance GUI. |
+| [`cmd/pcapreplay`](cmd/pcapreplay/README.md) | The CLI: command dispatch, flags, logging flags, Windows console/log handling, single-instance GUI. |
 | [`cmd/pcapgen`](cmd/pcapgen/README.md) | Synthetic capture generator for tests, benchmarks and the sample file. |
 | [`cmd/mkicon`](cmd/mkicon/README.md) | Renders the Windows `.ico` with the standard library. |
 | [`internal/pcapio`](internal/pcapio/README.md) | Streaming PCAP/PCAPNG reader (zero-alloc `Next`), sparse seek index, direction flags. |
@@ -241,7 +244,7 @@ Main dependency directions (arrows point at what is used; leaf packages such as 
 
 ```mermaid
 flowchart LR
-  cmd[cmd/pktreplay] --> gui & replay & stats & history & logx
+  cmd[cmd/pcapreplay] --> gui & replay & stats & history & logx
   gui --> replay & stats & history & record & conv
   replay --> pcapio & decode & filter & mutate & pace & backend & conv & craft & logx
   record --> backend
@@ -257,7 +260,7 @@ flowchart LR
 ## Repository layout
 
 ```
-cmd/            pktreplay (CLI), pcapgen (test data), mkicon (icon)
+cmd/            pcapreplay (CLI), pcapgen (test data), mkicon (icon)
 internal/       the libraries listed above, one directory each, each with a README.md
 docs/           ARCHITECTURE.md (design, formulas, measurements) and assets/ (logo, diagrams, screenshots)
 installer/      Inno Setup script, build and WinDivert-fetch scripts for the Windows installer
@@ -271,14 +274,14 @@ README-CLI.md   complete command-line reference
 Go 1.22 or newer. No other tools are needed.
 
 ```bash
-go build -o bin/pktreplay ./cmd/pktreplay
+go build -o bin/pcapreplay ./cmd/pcapreplay
 go test ./...                       # unit tests
 go test -race ./...                 # with the race detector (needs a C toolchain on some platforms)
 
 # cross-compile (cgo is not used)
-GOOS=linux   GOARCH=amd64 go build -o bin/pktreplay-linux       ./cmd/pktreplay
-GOOS=linux   GOARCH=arm64 go build -o bin/pktreplay-linux-arm64 ./cmd/pktreplay
-GOOS=windows GOARCH=amd64 go build -o bin/pktreplay.exe         ./cmd/pktreplay
+GOOS=linux   GOARCH=amd64 go build -o bin/pcapreplay-linux       ./cmd/pcapreplay
+GOOS=linux   GOARCH=arm64 go build -o bin/pcapreplay-linux-arm64 ./cmd/pcapreplay
+GOOS=windows GOARCH=amd64 go build -o bin/pcapreplay.exe         ./cmd/pcapreplay
 ```
 
 Version information is set at link time: `-ldflags "-X main.version=1.2.3"`. The Windows installer is built with
@@ -287,12 +290,12 @@ Version information is set at link time: `-ldflags "-X main.version=1.2.3"`. The
 ## Platform setup
 
 **Linux.** Raw sockets need `CAP_NET_RAW`; the automatic RST-drop rule also needs `CAP_NET_ADMIN`. The simplest option
-is `sudo`; alternatively `sudo setcap cap_net_raw,cap_net_admin+ep ./pktreplay`. In TCP mode pktreplay installs a
+is `sudo`; alternatively `sudo setcap cap_net_raw,cap_net_admin+ep ./pcapreplay`. In TCP mode pcapreplay installs a
 temporary nftables table dropping the kernel's RSTs for exactly the replay 4-tuple and removes it afterwards (use
 `-no-firewall` to manage it yourself).
 
 **Windows.** Sending on the network needs an elevated prompt and the [WinDivert](https://github.com/basil00/WinDivert) 2.2.x files (`WinDivert.dll`,
-`WinDivert64.sys`, from the [official releases](https://github.com/basil00/WinDivert/releases)) next to `pktreplay.exe`; the installer bundles them when they were staged at build time. Some
+`WinDivert64.sys`, from the [official releases](https://github.com/basil00/WinDivert/releases)) next to `pcapreplay.exe`; the installer bundles them when they were staged at build time. Some
 antivirus products flag WinDivert because the same technique is used by malware. Loopback targets are not supported
 by WinDivert network-layer injection. Analysis, conversation lists, dry runs and recording need no privileges.
 
@@ -358,7 +361,7 @@ license. See [THIRD_PARTY.md](THIRD_PARTY.md).
 
 ## Disclaimer
 
-pktreplay can transmit forged and replayed network traffic. You are responsible for using it lawfully and only on
+pcapreplay can transmit forged and replayed network traffic. You are responsible for using it lawfully and only on
 networks, hosts and data you own or have explicit permission to test. The software is provided as is, without
 warranty (see the license).
 

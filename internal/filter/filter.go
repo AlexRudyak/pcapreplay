@@ -29,7 +29,7 @@ import (
 	"strconv"
 	"strings"
 
-	"github.com/AlexRudyak/pktreplay/internal/decode"
+	"github.com/AlexRudyak/pcapreplay/internal/decode"
 )
 
 type matchFn func(frame []byte, in *decode.Info) bool

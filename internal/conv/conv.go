@@ -13,7 +13,7 @@ import (
 	"sort"
 	"strings"
 
-	"github.com/AlexRudyak/pktreplay/internal/decode"
+	"github.com/AlexRudyak/pcapreplay/internal/decode"
 )
 
 // DefaultMaxConversations bounds the flow table (~300 B per entry).

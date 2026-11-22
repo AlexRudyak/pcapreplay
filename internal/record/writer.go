@@ -4,7 +4,7 @@
 // Packets are stored as raw IP datagrams (LINKTYPE_RAW, 101) with nanosecond
 // timestamps taken when the packet was handed to / received from the backend,
 // so the recording opens in tshark and Wireshark and can be fed straight back
-// into pktreplay. PCAPNG output (chosen by a .pcapng extension) additionally
+// into pcapreplay. PCAPNG output (chosen by a .pcapng extension) additionally
 // tags every packet with its direction (inbound / outbound).
 package record
 

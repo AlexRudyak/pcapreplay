@@ -8,11 +8,11 @@ import (
 	"sync"
 	"time"
 
-	"github.com/AlexRudyak/pktreplay/internal/filter"
-	"github.com/AlexRudyak/pktreplay/internal/history"
-	"github.com/AlexRudyak/pktreplay/internal/record"
-	"github.com/AlexRudyak/pktreplay/internal/replay"
-	"github.com/AlexRudyak/pktreplay/internal/stats"
+	"github.com/AlexRudyak/pcapreplay/internal/filter"
+	"github.com/AlexRudyak/pcapreplay/internal/history"
+	"github.com/AlexRudyak/pcapreplay/internal/record"
+	"github.com/AlexRudyak/pcapreplay/internal/replay"
+	"github.com/AlexRudyak/pcapreplay/internal/stats"
 )
 
 const maxLog = 400

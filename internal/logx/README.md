@@ -24,4 +24,4 @@ Format: `15:04:05.000 LEVEL component: message`. `ParseLevel` accepts `quiet|inf
 * `Enabled(level)` lets hot paths test once and skip formatting entirely; the engine checks per-packet levels outside
   its loops.
 
-Used by: `replay`, `cmd/pktreplay` (flags are in `cmd/pktreplay/logflags.go`).
+Used by: `replay`, `cmd/pcapreplay` (flags are in `cmd/pcapreplay/logflags.go`).

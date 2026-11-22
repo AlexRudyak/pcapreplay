@@ -122,7 +122,7 @@ type Backend interface {
 | Injection | `AF_PACKET` + `SOCK_RAW`, batched `sendmmsg(2)` (<=256 frames/syscall) | `WinDivertSendEx`, up to 128 packets per call, network layer, outbound |
 | L2 addressing | Interface and source MAC from the routing choice; next hop via `/proc/net/arp`, default gateway, or an ARP probe; `-dst-mac` override | Not needed (stack routes) |
 | Capture | second `AF_PACKET` socket, filtered to the guarded 4-tuple, own frames (`PACKET_OUTGOING`) ignored | `WinDivertRecv` handle with a flow filter |
-| Stops the OS killing the session | `nft` table (`pktreplay_<pid>`) dropping outbound RSTs of the 4-tuple, falling back to `iptables`/`ip6tables`; removed on exit | The flow's inbound segments are **diverted** to us so the stack never sees them (no RST is generated); any outbound RST of the flow is captured and discarded |
+| Stops the OS killing the session | `nft` table (`pcapreplay_<pid>`) dropping outbound RSTs of the 4-tuple, falling back to `iptables`/`ip6tables`; removed on exit | The flow's inbound segments are **diverted** to us so the stack never sees them (no RST is generated); any outbound RST of the flow is captured and discarded |
 | Privileges | root, or `CAP_NET_RAW` (+ `CAP_NET_ADMIN` for the firewall rule) | Administrator; `WinDivert.dll` + `WinDivert64.sys` next to the exe |
 
 A `null` backend discards packets, for benchmarking the pipeline without privileges.

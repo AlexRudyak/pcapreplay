@@ -37,4 +37,4 @@ This is the entry point of every analysis and replay: nothing else in the projec
 
 `reader_test.go` covers both formats, byte orders, nanosecond timestamps, truncation, malformed headers and the index.
 
-Used by: `decode`, `stats`, `replay`, `history`, `mutate` (link types), `cmd/pktreplay`.
+Used by: `decode`, `stats`, `replay`, `history`, `mutate` (link types), `cmd/pcapreplay`.

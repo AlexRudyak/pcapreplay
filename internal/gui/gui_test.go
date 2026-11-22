@@ -12,7 +12,7 @@ import (
 	"testing"
 	"time"
 
-	"github.com/AlexRudyak/pktreplay/internal/craft"
+	"github.com/AlexRudyak/pcapreplay/internal/craft"
 )
 
 // tc is a test client talking to a real Server on a real loopback listener, so
@@ -129,7 +129,7 @@ func TestAuthAndHostChecks(t *testing.T) {
 	if r, b := c.do("GET", "/api/info", nil, nil); r.StatusCode != 200 || !strings.Contains(string(b), `"version":"test"`) {
 		t.Fatalf("info: %d %s", r.StatusCode, b)
 	}
-	if r, b := c.do("GET", "/", nil, nil); r.StatusCode != 200 || !strings.Contains(string(b), "pktreplay") ||
+	if r, b := c.do("GET", "/", nil, nil); r.StatusCode != 200 || !strings.Contains(string(b), "pcapreplay") ||
 		!strings.Contains(r.Header.Get("Content-Security-Policy"), "default-src 'self'") {
 		t.Fatalf("index: %d", r.StatusCode)
 	}

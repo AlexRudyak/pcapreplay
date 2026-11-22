@@ -7,7 +7,7 @@ import (
 	"strconv"
 	"time"
 
-	"github.com/AlexRudyak/pktreplay/internal/history"
+	"github.com/AlexRudyak/pcapreplay/internal/history"
 )
 
 // historyRoutes registers the history and settings endpoints. They are only active when the
@@ -224,11 +224,11 @@ func (s *Server) histExport(w http.ResponseWriter, r *http.Request) {
 	var err error
 	if r.URL.Query().Get("format") == "json" {
 		w.Header().Set("Content-Type", "application/json")
-		w.Header().Set("Content-Disposition", `attachment; filename="pktreplay-history-`+stamp+`.json"`)
+		w.Header().Set("Content-Disposition", `attachment; filename="pcapreplay-history-`+stamp+`.json"`)
 		err = s.hist.ExportJSON(w, q)
 	} else {
 		w.Header().Set("Content-Type", "text/csv; charset=utf-8")
-		w.Header().Set("Content-Disposition", `attachment; filename="pktreplay-history-`+stamp+`.csv"`)
+		w.Header().Set("Content-Disposition", `attachment; filename="pcapreplay-history-`+stamp+`.csv"`)
 		err = s.hist.ExportCSV(w, q)
 	}
 	if err != nil {
@@ -249,7 +249,7 @@ func (s *Server) histPackets(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	w.Header().Set("Content-Type", "application/octet-stream")
-	w.Header().Set("Content-Disposition", `attachment; filename="pktreplay-`+run.ID+`.pcapng"`)
+	w.Header().Set("Content-Disposition", `attachment; filename="pcapreplay-`+run.ID+`.pcapng"`)
 	http.ServeFile(w, r, p)
 }
 

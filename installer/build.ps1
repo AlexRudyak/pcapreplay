@@ -1,9 +1,9 @@
 <#
 .SYNOPSIS
-  Builds the pktreplay Windows installer: dist\pktreplay-setup-<version>.exe
+  Builds the pcapreplay Windows installer: dist\pcapreplay-setup-<version>.exe
 
 .DESCRIPTION
-  1. builds pktreplay.exe (console, CLI) and pktreplay-gui.exe (windowless, opens the GUI)
+  1. builds pcapreplay.exe (console, CLI) and pcapreplay-gui.exe (windowless, opens the GUI)
   2. renders the application icon
   3. stages files under dist\stage
   4. runs Inno Setup's ISCC.exe
@@ -15,7 +15,7 @@
   powershell -File installer\build.ps1 -Version 0.2.0
 #>
 param(
-  [string]$Version = "0.1.0",
+  [string]$Version = "0.2.0",
   [string]$Iscc = ""
 )
 $ErrorActionPreference = "Stop"
@@ -42,16 +42,16 @@ New-Item -ItemType Directory -Force "$stage\docs", "$stage\samples" | Out-Null
 
 $env:GOOS = "windows"; $env:GOARCH = "amd64"; $env:CGO_ENABLED = "0"
 $common = @("-trimpath")
-Write-Host "Building pktreplay.exe ($verString)..."
-go build @common -ldflags "-s -w -X main.version=$verString" -o "$stage\pktreplay.exe" .\cmd\pktreplay
+Write-Host "Building pcapreplay.exe ($verString)..."
+go build @common -ldflags "-s -w -X main.version=$verString" -o "$stage\pcapreplay.exe" .\cmd\pcapreplay
 if ($LASTEXITCODE) { throw "go build failed" }
-Write-Host "Building pktreplay-gui.exe..."
-go build @common -ldflags "-s -w -H=windowsgui -X main.version=$verString -X main.defaultCommand=gui" -o "$stage\pktreplay-gui.exe" .\cmd\pktreplay
+Write-Host "Building pcapreplay-gui.exe..."
+go build @common -ldflags "-s -w -H=windowsgui -X main.version=$verString -X main.defaultCommand=gui" -o "$stage\pcapreplay-gui.exe" .\cmd\pcapreplay
 if ($LASTEXITCODE) { throw "go build (gui) failed" }
 Remove-Item Env:GOOS, Env:GOARCH, Env:CGO_ENABLED
 
 Write-Host "Rendering icon..."
-go run .\cmd\mkicon -o "$stage\pktreplay.ico"
+go run .\cmd\mkicon -o "$stage\pcapreplay.ico"
 if ($LASTEXITCODE) { throw "icon generation failed" }
 
 Copy-Item README.md, installer\README-install.txt $stage
@@ -69,10 +69,10 @@ else { Write-Host "WinDivert: not bundled (run installer\fetch-windivert.ps1 to 
 
 # --- compile the installer ---
 Write-Host "Compiling installer with Inno Setup..."
-& $Iscc "/DAppVersion=$Version" "/Qp" "$root\installer\pktreplay.iss"
+& $Iscc "/DAppVersion=$Version" "/Qp" "$root\installer\pcapreplay.iss"
 if ($LASTEXITCODE) { throw "ISCC failed" }
 
-$setup = Join-Path $root "dist\pktreplay-setup-$Version.exe"
+$setup = Join-Path $root "dist\pcapreplay-setup-$Version.exe"
 $hash = (Get-FileHash $setup -Algorithm SHA256).Hash.ToLower()
-"$hash  pktreplay-setup-$Version.exe" | Set-Content "$setup.sha256" -Encoding ascii
+"$hash  pcapreplay-setup-$Version.exe" | Set-Content "$setup.sha256" -Encoding ascii
 Write-Host ("`nBuilt {0} ({1:N1} MB)`nSHA-256 {2}" -f $setup, ((Get-Item $setup).Length / 1MB), $hash)

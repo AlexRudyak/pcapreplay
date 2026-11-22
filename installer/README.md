@@ -1,23 +1,23 @@
 # installer
 
-Builds the **Windows installer** (`dist/pktreplay-setup-<version>.exe`) with [Inno Setup](https://jrsoftware.org/isinfo.php)
+Builds the **Windows installer** (`dist/pcapreplay-setup-<version>.exe`) with [Inno Setup](https://jrsoftware.org/isinfo.php)
 6 (`winget install JRSoftware.InnoSetup`).
 
 ```powershell
 powershell -File installer\build.ps1 -Version 0.2.0
 ```
 
-`build.ps1` builds `pktreplay.exe` (console, CLI) and `pktreplay-gui.exe` (windowless, opens the GUI), renders the icon
+`build.ps1` builds `pcapreplay.exe` (console, CLI) and `pcapreplay-gui.exe` (windowless, opens the GUI), renders the icon
 with `cmd/mkicon`, stages everything under `dist/stage`, runs `ISCC.exe` and writes a `.sha256` file.
 
-## What the installer does (`pktreplay.iss`)
+## What the installer does (`pcapreplay.iss`)
 
 * Installs **per user by default** (no UAC prompt); "all users" is offered.
-* Start Menu shortcuts: **pktreplay** and **pktreplay (Administrator)** (the shortcut has the "run as administrator"
+* Start Menu shortcuts: **pcapreplay** and **pcapreplay (Administrator)** (the shortcut has the "run as administrator"
   flag set), optional desktop shortcut, optional **PATH** entry (added and removed in the `[Code]` section).
 * Installs the sample capture and a short `README-install.txt`.
 * Registers a normal uninstaller that removes everything it added. The history folder is **kept** on uninstall.
-* Silent install: `pktreplay-setup-0.1.0.exe /VERYSILENT /CURRENTUSER /TASKS=addpath` (`/ALLUSERS` for machine-wide).
+* Silent install: `pcapreplay-setup-0.2.0.exe /VERYSILENT /CURRENTUSER /TASKS=addpath` (`/ALLUSERS` for machine-wide).
 
 ## Bundling WinDivert (optional)
 

@@ -38,4 +38,4 @@ Parse errors are reported with the offending token before any packet is processe
 `filter_test.go` checks parsing, precedence, every field, cost ordering and error messages; a benchmark tracks the
 header-only fast path.
 
-Used by: `stats`, `replay`, `gui` (live filter validation), `cmd/pktreplay`.
+Used by: `stats`, `replay`, `gui` (live filter validation), `cmd/pcapreplay`.

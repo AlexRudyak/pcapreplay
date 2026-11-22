@@ -1,4 +1,4 @@
-// Command pktreplay analyses and replays PCAP/PCAPNG captures.
+// Command pcapreplay analyses and replays PCAP/PCAPNG captures.
 package main
 
 import (
@@ -9,10 +9,10 @@ import (
 )
 
 // Set at build time with -ldflags "-X main.version=... -X main.defaultCommand=gui".
-// defaultCommand is used when no command is given: the windowless pktreplay-gui
+// defaultCommand is used when no command is given: the windowless pcapreplay-gui
 // build sets it to "gui" so that double-clicking the exe opens the interface.
 var (
-	version        = "0.1.0"
+	version        = "0.2.0"
 	defaultCommand = ""
 )
 
@@ -21,25 +21,25 @@ var (
 // the user can read what it printed.
 var ownConsole bool
 
-const usage = `pktreplay - streaming PCAP/PCAPNG analysis and replay
+const usage = `pcapreplay - streaming PCAP/PCAPNG analysis and replay
 
 Usage:
-  pktreplay stats  [flags] <capture>     one-pass summary statistics
-  pktreplay conversations [flags] <capture>  list bidirectional conversations
-  pktreplay index  [flags] <capture>     build a seek index for large files
-  pktreplay replay [flags] <capture>     replay filtered packets (see 'replay -h')
-  pktreplay gui    [-no-open]            local web GUI (loopback only, token protected)
-  pktreplay version                      print the version
+  pcapreplay stats  [flags] <capture>     one-pass summary statistics
+  pcapreplay conversations [flags] <capture>  list bidirectional conversations
+  pcapreplay index  [flags] <capture>     build a seek index for large files
+  pcapreplay replay [flags] <capture>     replay filtered packets (see 'replay -h')
+  pcapreplay gui    [-no-open]            local web GUI (loopback only, token protected)
+  pcapreplay version                      print the version
 
-Run 'pktreplay <command> -h' for the flags of each command.
-Started without arguments from Explorer, pktreplay opens the GUI.
+Run 'pcapreplay <command> -h' for the flags of each command.
+Started without arguments from Explorer, pcapreplay opens the GUI.
 `
 
 // recoverCrash turns a panic into a visible message and a log entry instead of a
 // window that silently disappears.
 func recoverCrash() {
 	if r := recover(); r != nil {
-		msg := fmt.Sprintf("pktreplay crashed: %v", r)
+		msg := fmt.Sprintf("pcapreplay crashed: %v", r)
 		fmt.Fprintf(os.Stderr, "%s\n%s\n", msg, debug.Stack())
 		if logPath != "" {
 			msg += "\n\nDetails: " + logPath
@@ -80,7 +80,7 @@ func main() {
 	case "index":
 		err = cmdIndex(args[2:])
 	case "version", "-v", "--version":
-		fmt.Println("pktreplay", version)
+		fmt.Println("pcapreplay", version)
 		return
 	case "-h", "--help", "help":
 		fmt.Print(usage)

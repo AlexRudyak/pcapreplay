@@ -9,14 +9,14 @@ import (
 	"strings"
 	"time"
 
-	"github.com/AlexRudyak/pktreplay/internal/backend"
-	"github.com/AlexRudyak/pktreplay/internal/conv"
-	"github.com/AlexRudyak/pktreplay/internal/filter"
-	"github.com/AlexRudyak/pktreplay/internal/mutate"
-	"github.com/AlexRudyak/pktreplay/internal/pace"
-	"github.com/AlexRudyak/pktreplay/internal/pcapio"
-	"github.com/AlexRudyak/pktreplay/internal/record"
-	"github.com/AlexRudyak/pktreplay/internal/replay"
+	"github.com/AlexRudyak/pcapreplay/internal/backend"
+	"github.com/AlexRudyak/pcapreplay/internal/conv"
+	"github.com/AlexRudyak/pcapreplay/internal/filter"
+	"github.com/AlexRudyak/pcapreplay/internal/mutate"
+	"github.com/AlexRudyak/pcapreplay/internal/pace"
+	"github.com/AlexRudyak/pcapreplay/internal/pcapio"
+	"github.com/AlexRudyak/pcapreplay/internal/record"
+	"github.com/AlexRudyak/pcapreplay/internal/replay"
 )
 
 // RangeRequest selects a slice of a capture.
