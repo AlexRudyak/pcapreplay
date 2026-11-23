@@ -5,6 +5,17 @@ uses [Semantic Versioning](https://semver.org/).
 
 ## [Unreleased]
 
+### Changed
+- Started from the Start Menu or by double-click, the GUI now exits by itself about 90 seconds after its last browser tab
+  is closed (not while a replay is running), instead of staying in the background until sign-out. Started from a
+  terminal (`pcapreplay gui`) it still runs until Ctrl-C.
+
+### Fixed
+- "Restart as administrator" and reopening the GUI from **pcapreplay (Administrator)** opened the Documents folder
+  instead of the browser. The tab now switches to the restarted program.
+- Leftovers on exit: restarting as administrator, closing the console window, sign-out and shutdown now shut down
+  cleanly (history closed, `gui-instance.json` removed), and no temporary files are left in the temp folder.
+
 ## [0.2.0]
 
 ### Changed

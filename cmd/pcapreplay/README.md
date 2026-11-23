@@ -22,6 +22,12 @@ Complete flags: [README-CLI.md](../../README-CLI.md).
 * `gui_instance.go` implements **single-instance GUI**: a running GUI writes `gui-instance.json` (URL with token,
   pid, elevation) beside the history folder; a second launch with default options probes that URL, checks the
   `X-Pcapreplay` header and merely reopens the browser. An elevated launch does not reuse a non-elevated instance.
+* **Lifetime.** Launched windowless or by double-click (`gui.Options.ExitWhenClosed`), the GUI exits about 90 s of
+  awake time after its last tab sent `/api/bye` (on `pagehide`) without another page checking in; terminal launches run
+  until Ctrl-C. Ctrl-C, closing the console, sign-out and shutdown (`SIGTERM`) all go through the normal shutdown.
+* **Restart as administrator** relaunches with the internal `-handoff <file>` flag: the elevated copy writes its URL into
+  that (already existing) file and the old tab navigates there. An elevated process that must open a browser hands
+  Explorer a short-lived `.url` shortcut in `%TEMP%`, because Explorer mangles a URL with `?t=` on its command line.
 * Platform files: `console_*.go` (detects when the console window belongs to this process so errors are not lost on
   double-click), `log_*.go` (the GUI build writes `%LOCALAPPDATA%\pcapreplay\pcapreplay-gui.log`), `errbox_*.go` (a
   message box when there is no console).

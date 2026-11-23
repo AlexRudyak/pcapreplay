@@ -24,6 +24,7 @@ import (
 	"runtime"
 	"sort"
 	"strings"
+	"sync"
 	"time"
 
 	"github.com/AlexRudyak/pcapreplay/internal/filter"
@@ -43,6 +44,14 @@ type Server struct {
 	hist     *history.Store // nil when history is disabled
 	listener net.Listener
 	Version  string
+
+	exitWhenClosed bool
+	stopOnce       sync.Once // closes the listener, which makes Serve return
+	closeOnce      sync.Once
+	grace          time.Duration // pageGrace; shorter in tests
+	pageMu         sync.Mutex
+	closing        bool          // the last page said it was closing, and none has checked in since
+	waited         time.Duration // awake time since then
 }
 
 // Options configures optional server features.
@@ -50,7 +59,16 @@ type Options struct {
 	// DataDir is where the run history (and the packet copies of every run) is
 	// stored. Empty disables the history.
 	DataDir string
+	// ExitWhenClosed makes Serve return once the browser tab has been closed and no
+	// other page has been heard from for pageGrace (and no job is running). It is for
+	// launches where the tab is the only window of the program.
+	ExitWhenClosed bool
 }
+
+// pageGrace is how long the server waits after a tab said it was closing before it exits:
+// long enough for a reload, and for another (possibly throttled, background) tab of the same
+// GUI to check in; its heartbeat runs every 20 s, at most once a minute when hidden.
+const pageGrace = 90 * time.Second
 
 // New binds addr (use "127.0.0.1:0" for a free port) and prepares the server
 // without a persistent history.
@@ -91,6 +109,9 @@ func NewWithOptions(addr, version string, opts Options) (*Server, error) {
 		hist:     hist,
 		listener: ln,
 		Version:  version,
+
+		exitWhenClosed: opts.ExitWhenClosed,
+		grace:          pageGrace,
 	}, nil
 }
 
@@ -102,18 +123,65 @@ func (s *Server) URL() string {
 // Serve blocks serving requests.
 func (s *Server) Serve() error {
 	srv := &http.Server{Handler: s.Handler(), ReadHeaderTimeout: 10 * time.Second}
+	if s.exitWhenClosed {
+		done := make(chan struct{})
+		defer close(done)
+		go s.watchPages(done)
+	}
 	return srv.Serve(s.listener)
 }
 
-// Close stops listening and cancels any running job.
-func (s *Server) Close() error {
-	s.jobs.Stop()
-	s.jobs.Wait(3 * time.Second) // let a cancelled run write its final history entry
-	err := s.listener.Close()
-	if s.hist != nil {
-		s.hist.Close()
+// stop makes Serve return (with net.ErrClosed), so the caller's normal shutdown runs.
+func (s *Server) stop() { s.stopOnce.Do(func() { s.listener.Close() }) }
+
+// watchPages stops the server once the last tab has gone and no job is running.
+func (s *Server) watchPages(done <-chan struct{}) {
+	tick := min(5*time.Second, s.grace/4)
+	t := time.NewTicker(tick)
+	defer t.Stop()
+	prev := time.Now()
+	for {
+		select {
+		case <-done:
+			return
+		case now := <-t.C:
+			// Count awake time only: a gap much longer than the tick means the computer slept
+			// (or the process was throttled), and the pages could not check in meanwhile.
+			step := min(now.Sub(prev), 2*tick)
+			prev = now
+			s.pageMu.Lock()
+			if s.closing {
+				s.waited += step
+			}
+			gone := s.closing && s.waited >= s.grace
+			s.pageMu.Unlock()
+			if gone && s.jobs.Status().State != stateRunning {
+				s.stop()
+				return
+			}
+		}
 	}
-	return err
+}
+
+// pageSeen records that a page of this GUI is open.
+func (s *Server) pageSeen() {
+	s.pageMu.Lock()
+	s.closing, s.waited = false, 0
+	s.pageMu.Unlock()
+}
+
+// Close stops listening, cancels any running job and closes the history. It is safe to call
+// more than once.
+func (s *Server) Close() error {
+	s.closeOnce.Do(func() {
+		s.jobs.Stop()
+		s.jobs.Wait(3 * time.Second) // let a cancelled run write its final history entry
+		s.stop()
+		if s.hist != nil {
+			s.hist.Close()
+		}
+	})
+	return nil
 }
 
 // Handler returns the full HTTP handler (exported for tests).
@@ -130,6 +198,8 @@ func (s *Server) Handler() http.Handler {
 	mux.HandleFunc("/api/cancel", s.cancel)
 	mux.HandleFunc("/api/status", s.status)
 	mux.HandleFunc("/api/elevate", s.elevate)
+	mux.HandleFunc("/api/alive", s.alive)
+	mux.HandleFunc("/api/bye", s.bye)
 	s.historyRoutes(mux)
 	return s.guard(mux)
 }
@@ -173,6 +243,9 @@ func (s *Server) guard(next http.Handler) http.Handler {
 				return
 			}
 			r.Body = http.MaxBytesReader(w, r.Body, 1<<20)
+		}
+		if r.URL.Path != "/api/bye" {
+			s.pageSeen()
 		}
 		next.ServeHTTP(w, r)
 	})
@@ -289,7 +362,28 @@ func (s *Server) elevate(w http.ResponseWriter, r *http.Request) {
 	}
 	next := waitHandoff(handoff, 30*time.Second)
 	writeJSON(w, 200, map[string]any{"restarting": true, "url": next})
-	go func() { time.Sleep(800 * time.Millisecond); os.Exit(0) }()
+	// Shut down normally (history closed, instance record cleaned up) once the answer is out.
+	time.AfterFunc(800*time.Millisecond, s.stop)
+}
+
+// alive is the open pages' heartbeat (every request counts; this one keeps an idle tab counted).
+func (s *Server) alive(w http.ResponseWriter, r *http.Request) {
+	var req struct{}
+	if decodeBody(w, r, &req) {
+		writeJSON(w, 200, map[string]bool{"ok": true})
+	}
+}
+
+// bye is sent by a page that is being closed or reloaded.
+func (s *Server) bye(w http.ResponseWriter, r *http.Request) {
+	var req struct{}
+	if !decodeBody(w, r, &req) {
+		return
+	}
+	s.pageMu.Lock()
+	s.closing, s.waited = true, 0
+	s.pageMu.Unlock()
+	writeJSON(w, 200, map[string]bool{"ok": true})
 }
 
 // waitHandoff waits for the elevated copy to write its address and returns it, or ""

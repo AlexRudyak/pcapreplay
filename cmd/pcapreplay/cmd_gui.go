@@ -11,6 +11,8 @@ import (
 	"os/signal"
 	"path/filepath"
 	"runtime"
+	"sync"
+	"syscall"
 	"time"
 
 	"github.com/AlexRudyak/pcapreplay/internal/gui"
@@ -31,11 +33,13 @@ func cmdGUI(args []string) error {
 	// show opens u for the user: through the handoff file when the instance that restarted us
 	// is waiting for it (it moves its own tab there), otherwise in the browser.
 	show := func(u string) bool {
-		if *handoff != "" && os.WriteFile(*handoff, []byte(u), 0o600) == nil {
+		if *handoff != "" && writeHandoff(*handoff, u) {
 			return true
 		}
 		return *noOpen || openBrowser(u)
 	}
+	defer removeURLShortcut()
+	removeStaleURLShortcut()
 
 	// Default launch only: if a GUI is already running for this user, show it again instead of
 	// starting a second process (this is what happens when the browser tab was closed).
@@ -50,7 +54,11 @@ func cmdGUI(args []string) error {
 		}
 	}
 
+	windowless := defaultCommand != "" // pcapreplay-gui.exe: no console, output goes to the log file
 	var opts gui.Options
+	// Started from the Start Menu or by double-click, the browser tab is the program's only
+	// window: closing it ends the program. From a terminal it runs until Ctrl-C.
+	opts.ExitWhenClosed = (windowless || ownConsole) && !*noOpen
 	if !*noHistory {
 		opts.DataDir = *dataDir
 		if opts.DataDir == "" {
@@ -77,14 +85,13 @@ func cmdGUI(args []string) error {
 	if shared {
 		defer registerInstance(url, gui.IsElevated())()
 	}
-	windowless := defaultCommand != "" // pcapreplay-gui.exe: no console, output goes to the log file
 	if windowless {
 		// Keep the access token out of the log file.
 		fmt.Fprintf(os.Stderr, "GUI listening on loopback only (elevated: %v)\n", gui.IsElevated())
 	} else {
 		fmt.Fprintf(os.Stderr, "pcapreplay GUI listening on loopback only (administrator: %v).\nOpen: %s\n(the URL contains a private access token; Ctrl-C to quit)\n", gui.IsElevated(), url)
 		if ownConsole {
-			fmt.Fprintln(os.Stderr, "Leave this window open while you use pcapreplay; closing it stops the program.")
+			fmt.Fprintln(os.Stderr, "Leave this window open while you use pcapreplay; closing it stops the program.\nIt also closes by itself shortly after you close the browser tab.")
 		}
 	}
 	if !show(url) {
@@ -97,7 +104,8 @@ func cmdGUI(args []string) error {
 	}
 	go func() {
 		c := make(chan os.Signal, 1)
-		signal.Notify(c, os.Interrupt)
+		// SIGTERM: on Windows, the console window being closed, sign-out and shutdown.
+		signal.Notify(c, os.Interrupt, syscall.SIGTERM)
 		<-c
 		srv.Close()
 	}()
@@ -128,7 +136,7 @@ func openBrowser(url string) bool {
 				return false
 			}
 			cmd = exec.Command("explorer.exe", f)
-			go func() { time.Sleep(time.Minute); os.Remove(f) }() // Explorer reads it asynchronously
+			go func() { time.Sleep(time.Minute); removeURLShortcut() }()
 		} else {
 			cmd = exec.Command("rundll32", "url.dll,FileProtocolHandler", url)
 		}
@@ -144,12 +152,62 @@ func openBrowser(url string) bool {
 	return true
 }
 
-// writeURLShortcut writes an Internet shortcut to url in the per-user temp folder (the URL holds
-// the access token, so the file is private to this account) and returns its path.
+// The Internet shortcut handed to Explorer holds the access token, so it lives in the per-user
+// temp folder only as long as Explorer needs to read it.
+var shortcut struct {
+	sync.Mutex
+	path    string
+	written time.Time
+}
+
+const shortcutPrefix = "pcapreplay-open-"
+
+// writeURLShortcut writes an Internet shortcut to url and returns its path.
 func writeURLShortcut(url string) (string, bool) {
-	f := filepath.Join(os.TempDir(), "pcapreplay-open.url")
+	f := filepath.Join(os.TempDir(), fmt.Sprintf("%s%d.url", shortcutPrefix, os.Getpid()))
 	if err := os.WriteFile(f, []byte("[InternetShortcut]\r\nURL="+url+"\r\n"), 0o600); err != nil {
 		return "", false
 	}
+	shortcut.Lock()
+	shortcut.path, shortcut.written = f, time.Now()
+	shortcut.Unlock()
 	return f, true
+}
+
+// removeURLShortcut deletes this process's shortcut, first giving Explorer (which opens it
+// asynchronously) a few seconds to read a freshly written one.
+func removeURLShortcut() {
+	shortcut.Lock()
+	defer shortcut.Unlock()
+	if shortcut.path == "" {
+		return
+	}
+	if d := 5*time.Second - time.Since(shortcut.written); d > 0 {
+		time.Sleep(d)
+	}
+	os.Remove(shortcut.path)
+	shortcut.path = ""
+}
+
+// removeStaleURLShortcut deletes shortcuts left by a pcapreplay that was killed before it could
+// clean up (sign-out, Task Manager).
+func removeStaleURLShortcut() {
+	old, _ := filepath.Glob(filepath.Join(os.TempDir(), shortcutPrefix+"*.url"))
+	for _, f := range old {
+		if fi, err := os.Stat(f); err == nil && time.Since(fi.ModTime()) > 2*time.Minute {
+			os.Remove(f)
+		}
+	}
+}
+
+// writeHandoff gives the instance that restarted this one its new address. The file must already
+// exist (that instance creates it and deletes it when it stops waiting), so a late write cannot
+// leave a new file behind.
+func writeHandoff(path, u string) bool {
+	f, err := os.OpenFile(path, os.O_WRONLY|os.O_TRUNC, 0)
+	if err != nil {
+		return false
+	}
+	_, werr := f.WriteString(u)
+	return f.Close() == nil && werr == nil
 }

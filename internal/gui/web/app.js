@@ -29,7 +29,9 @@ function serviceName(c) {
 
 async function api(path, body) {
   const opts = body === undefined ? {} : { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(body) };
-  const r = await fetch(path, opts);
+  let r;
+  try { r = await fetch(path, opts); }
+  catch (_) { throw new Error("pcapreplay is no longer running. Start it again to continue."); }
   const data = await r.json().catch(() => ({}));
   if (!r.ok) throw new Error(data.error || r.statusText);
   return data;
@@ -957,6 +959,16 @@ $("#hsDone").onclick = async () => {
 };
 $("#hsClear").onclick = () => armConfirm($("#hsClear"), "Click again: delete all (keeps pinned)", async () => {
   try { const r = await api("/api/history/clear", { keepPinned: true }); $("#histSetDlg").close(); toast(plural(r.removed, "run") + " deleted."); refreshHistoryCount(); loadHistory(false); } catch (e) { toast(e.message); }
+});
+
+// ---------- lifetime ----------
+// The program started from the Start Menu or by double-click has no window of its own: it
+// exits a while after its last tab is closed. Tell it when this tab goes away, and keep it
+// informed that the tab is still open.
+setInterval(() => api("/api/alive", {}).catch(() => {}), 20000);
+document.addEventListener("visibilitychange", () => { if (document.visibilityState === "visible") api("/api/alive", {}).catch(() => {}); });
+window.addEventListener("pagehide", () => {
+  try { fetch("/api/bye", { method: "POST", headers: { "Content-Type": "application/json" }, body: "{}", keepalive: true }); } catch (_) { /* gone already */ }
 });
 
 // ---------- init ----------
