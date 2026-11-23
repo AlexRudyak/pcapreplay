@@ -62,6 +62,11 @@ func main() {
 		// far more useful than printing usage into a window that closes at once.
 		args = []string{args[0], "gui"}
 		ownConsole = true
+	} else if len(args) >= 2 && (args[1] == "-handoff" || args[1] == "--handoff") {
+		// The GUI's "Restart as administrator" relaunches a double-clicked console exe with only
+		// its internal -handoff flag added: treat it like the double-click it replaces.
+		args = append([]string{args[0], "gui"}, args[1:]...)
+		ownConsole = consoleSoleOwner()
 	}
 	if len(args) < 2 {
 		fmt.Fprint(os.Stderr, usage)

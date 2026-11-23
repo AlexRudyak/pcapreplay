@@ -533,7 +533,12 @@ $("#againBtn").onclick = () => { S.view = "cfg"; showRun(); };
 function showRun() { $("#cfgView").hidden = S.view !== "cfg"; $("#runView").hidden = S.view !== "run"; }
 
 async function elevate() {
-  try { await api("/api/elevate", {}); toast("A new pcapreplay window is opening with administrator rights. You can close this tab."); }
+  try {
+    toast("Waiting for the administrator prompt…");
+    const r = await api("/api/elevate", {});
+    if (r && typeof r.url === "string" && /^http:\/\/(127\.0\.0\.1|localhost)[:/]/.test(r.url)) { location.replace(r.url); return; }
+    toast("pcapreplay restarted with administrator rights, but this tab could not be switched to it. Start pcapreplay again to open it.");
+  }
   catch (e) { toast(e.message); }
 }
 $("#elevateBtn").onclick = elevate; $("#elevateBtn2").onclick = elevate;

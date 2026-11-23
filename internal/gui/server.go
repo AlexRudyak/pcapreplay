@@ -272,12 +272,42 @@ func (s *Server) elevate(w http.ResponseWriter, r *http.Request) {
 		fail(w, http.StatusConflict, errBusy)
 		return
 	}
-	if err := relaunchElevated(); err != nil {
+	// The elevated copy writes its address into this file instead of opening a browser; the
+	// file is created here first so it keeps this user's permissions even when the copy runs
+	// under another (administrator) account.
+	f, err := os.CreateTemp("", "pcapreplay-handoff-*.txt")
+	if err != nil {
+		fail(w, http.StatusInternalServerError, err)
+		return
+	}
+	handoff := f.Name()
+	f.Close()
+	defer os.Remove(handoff)
+	if err := relaunchElevated(handoff); err != nil {
 		fail(w, http.StatusBadRequest, err)
 		return
 	}
-	writeJSON(w, 200, map[string]bool{"restarting": true})
+	next := waitHandoff(handoff, 30*time.Second)
+	writeJSON(w, 200, map[string]any{"restarting": true, "url": next})
 	go func() { time.Sleep(800 * time.Millisecond); os.Exit(0) }()
+}
+
+// waitHandoff waits for the elevated copy to write its address and returns it, or ""
+// when it did not arrive in time or is not a loopback pcapreplay address.
+func waitHandoff(path string, timeout time.Duration) string {
+	for end := time.Now().Add(timeout); time.Now().Before(end); time.Sleep(100 * time.Millisecond) {
+		b, err := os.ReadFile(path)
+		if err != nil || len(b) == 0 {
+			continue
+		}
+		s := strings.TrimSpace(string(b))
+		u, err := url.Parse(s)
+		if err != nil || u.Scheme != "http" || (u.Hostname() != "127.0.0.1" && u.Hostname() != "localhost") {
+			return ""
+		}
+		return s
+	}
+	return ""
 }
 
 func roots() []string {

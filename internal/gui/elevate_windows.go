@@ -11,19 +11,31 @@ import (
 )
 
 // relaunchElevated starts a copy of this program with administrator rights (the
-// user sees the normal UAC prompt). The caller exits afterwards, so the new
-// instance, which opens its own browser tab, replaces this one.
-func relaunchElevated() error {
+// user sees the normal UAC prompt). The copy does not open a browser itself: it
+// writes its address to handoff, and the caller sends the current tab there.
+// (A browser started from the elevated process would run elevated, which browsers
+// often refuse, and handing a tokenised URL to explorer.exe does not work.)
+func relaunchElevated(handoff string) error {
 	exe, err := os.Executable()
 	if err != nil {
 		return err
 	}
 	var args []string
-	for _, a := range os.Args[1:] {
-		if a != "-no-open" && a != "--no-open" { // the new instance must open a browser
-			args = append(args, syscall.EscapeArg(a))
+	for i := 1; i < len(os.Args); i++ {
+		a := os.Args[i]
+		switch a {
+		case "-no-open", "--no-open":
+			continue
+		case "-handoff", "--handoff":
+			i++ // drop its value too
+			continue
 		}
+		if strings.HasPrefix(a, "-handoff=") || strings.HasPrefix(a, "--handoff=") {
+			continue
+		}
+		args = append(args, syscall.EscapeArg(a))
 	}
+	args = append(args, "-handoff", syscall.EscapeArg(handoff))
 	verb, _ := syscall.UTF16PtrFromString("runas")
 	file, _ := syscall.UTF16PtrFromString(exe)
 	params, _ := syscall.UTF16PtrFromString(strings.Join(args, " "))
