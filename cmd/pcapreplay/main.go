@@ -12,7 +12,7 @@ import (
 // defaultCommand is used when no command is given: the windowless pcapreplay-gui
 // build sets it to "gui" so that double-clicking the exe opens the interface.
 var (
-	version        = "0.2.0"
+	version        = "0.2.1"
 	defaultCommand = ""
 )
 

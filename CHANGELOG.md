@@ -5,6 +5,8 @@ uses [Semantic Versioning](https://semver.org/).
 
 ## [Unreleased]
 
+## [0.2.1]
+
 ### Changed
 - Started from the Start Menu or by double-click, the GUI now exits by itself about 90 seconds after its last browser tab
   is closed (not while a replay is running), instead of staying in the background until sign-out. Started from a
@@ -49,6 +51,7 @@ First public version.
 - Windows installer (Inno Setup) with optional bundled WinDivert.
 - Documentation: top-level README, CLI reference, architecture notes and a README for every package.
 
-[Unreleased]: https://github.com/AlexRudyak/pcapreplay/compare/v0.2.0...HEAD
+[Unreleased]: https://github.com/AlexRudyak/pcapreplay/compare/v0.2.1...HEAD
+[0.2.1]: https://github.com/AlexRudyak/pcapreplay/compare/v0.2.0...v0.2.1
 [0.2.0]: https://github.com/AlexRudyak/pcapreplay/compare/v0.1.0...v0.2.0
 [0.1.0]: https://github.com/AlexRudyak/pcapreplay/releases/tag/v0.1.0

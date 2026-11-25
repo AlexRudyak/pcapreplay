@@ -12,10 +12,10 @@
   Optional: put the official WinDivert.dll and WinDivert64.sys in installer\redist to bundle them.
 
 .EXAMPLE
-  powershell -File installer\build.ps1 -Version 0.2.0
+  powershell -File installer\build.ps1 -Version 0.2.1
 #>
 param(
-  [string]$Version = "0.2.0",
+  [string]$Version = "0.2.1",
   [string]$Iscc = ""
 )
 $ErrorActionPreference = "Stop"

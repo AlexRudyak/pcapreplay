@@ -4,7 +4,7 @@ Builds the **Windows installer** (`dist/pcapreplay-setup-<version>.exe`) with [I
 6 (`winget install JRSoftware.InnoSetup`).
 
 ```powershell
-powershell -File installer\build.ps1 -Version 0.2.0
+powershell -File installer\build.ps1 -Version 0.2.1
 ```
 
 `build.ps1` builds `pcapreplay.exe` (console, CLI) and `pcapreplay-gui.exe` (windowless, opens the GUI), renders the icon
@@ -17,7 +17,7 @@ with `cmd/mkicon`, stages everything under `dist/stage`, runs `ISCC.exe` and wri
   flag set), optional desktop shortcut, optional **PATH** entry (added and removed in the `[Code]` section).
 * Installs the sample capture and a short `README-install.txt`.
 * Registers a normal uninstaller that removes everything it added. The history folder is **kept** on uninstall.
-* Silent install: `pcapreplay-setup-0.2.0.exe /VERYSILENT /CURRENTUSER /TASKS=addpath` (`/ALLUSERS` for machine-wide).
+* Silent install: `pcapreplay-setup-0.2.1.exe /VERYSILENT /CURRENTUSER /TASKS=addpath` (`/ALLUSERS` for machine-wide).
 
 ## Bundling WinDivert (optional)
 
