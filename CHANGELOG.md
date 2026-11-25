@@ -11,6 +11,8 @@ uses [Semantic Versioning](https://semver.org/).
   terminal (`pcapreplay gui`) it still runs until Ctrl-C.
 
 ### Fixed
+- **Stop** did not stop a paced replay until the next packet was due, so a capture with long pauses between packets
+  kept running to the end. Both the UDP and TCP engines now stop within milliseconds.
 - "Restart as administrator" and reopening the GUI from **pcapreplay (Administrator)** opened the Documents folder
   instead of the browser. The tab now switches to the restarted program.
 - Leftovers on exit: restarting as administrator, closing the console window, sign-out and shutdown now shut down

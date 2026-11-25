@@ -1,6 +1,7 @@
 package pace
 
 import (
+	"context"
 	"sort"
 	"testing"
 	"time"
@@ -78,5 +79,19 @@ func TestValidation(t *testing.T) {
 		if _, err := New(c); err == nil {
 			t.Errorf("%+v accepted", c)
 		}
+	}
+}
+
+func TestWaitContextStopsDuringALongGap(t *testing.T) {
+	p, _ := New(Config{Mode: Fixed, Delay: time.Minute})
+	ctx, cancel := context.WithCancel(context.Background())
+	p.Wait(0, 1) // first packet is due immediately
+	time.AfterFunc(50*time.Millisecond, cancel)
+	start := time.Now()
+	if err := p.WaitContext(ctx, 0, 1); err != context.Canceled {
+		t.Fatalf("err = %v, want context.Canceled", err)
+	}
+	if el := time.Since(start); el > time.Second {
+		t.Fatalf("stop took %v", el)
 	}
 }

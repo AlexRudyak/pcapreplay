@@ -675,7 +675,9 @@ func (s *tcpSession) replayOne(it item, pc *pace.Pacer, cnt *Counters, local, us
 	b.SetFlags(uint8(flags))
 	b.SetWindow(65535)
 
-	pc.Wait(it.ts, len(b.B))
+	if pc.WaitContext(s.ctx, it.ts, len(b.B)) != nil {
+		return nil // stopped during a gap: replay() sees the cancelled context and ends cleanly
+	}
 
 	off := int64(int32(origSeq-s.capBase)) + s.tc.SeqOffset + deltaBefore
 	seq := s.isn + 1 + uint32(off)

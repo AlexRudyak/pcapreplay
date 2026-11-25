@@ -155,3 +155,21 @@ func TestCancel(t *testing.T) {
 		t.Fatalf("sent %d packets before cancel", n)
 	}
 }
+
+// A stop must not wait for the next packet of a slowly paced capture to become due.
+func TestUDPStopsDuringAPacingGap(t *testing.T) {
+	be := &capture{}
+	ctx, cancel := context.WithCancel(context.Background())
+	time.AfterFunc(100*time.Millisecond, cancel)
+	start := time.Now()
+	res, err := RunUDP(ctx, Config{Capture: twoConversations(t), Backend: be, Pace: pace.Config{Mode: pace.Fixed, Delay: time.Minute}})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if el := time.Since(start); el > 2*time.Second {
+		t.Fatalf("stop took %v", el)
+	}
+	if n := res.Counters.Sent.Load(); n != 1 {
+		t.Fatalf("sent %d packets before the stop, want 1", n)
+	}
+}

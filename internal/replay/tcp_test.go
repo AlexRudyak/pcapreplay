@@ -378,3 +378,17 @@ func TestProbeFlowPicksFirstMatch(t *testing.T) {
 		t.Fatalf("%+v %v", k, err)
 	}
 }
+
+// A stop must not wait for the next segment of a slowly paced capture to become due.
+func TestTCPStopsDuringAPacingGap(t *testing.T) {
+	fs := newFake()
+	cfg := baseCfg(t, withHandshake(), fs)
+	cfg.Pace = pace.Config{Mode: pace.Fixed, Delay: time.Minute}
+	ctx, cancel := context.WithCancel(context.Background())
+	time.AfterFunc(200*time.Millisecond, cancel)
+	start := time.Now()
+	RunTCP(ctx, cfg) // the error (if any) is irrelevant: only how fast it returns matters
+	if el := time.Since(start); el > 4*time.Second {
+		t.Fatalf("stop took %v", el)
+	}
+}

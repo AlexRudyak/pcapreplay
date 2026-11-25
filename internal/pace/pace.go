@@ -3,6 +3,7 @@
 package pace
 
 import (
+	"context"
 	"fmt"
 	"runtime"
 	"time"
@@ -83,8 +84,15 @@ func (p *Pacer) Unpaced() bool { return p.cfg.Mode == Burst }
 // capture timestamp and wireBytes the frame size; both are only used by the
 // modes that need them.
 func (p *Pacer) Wait(tsNanos int64, wireBytes int) {
+	_ = p.WaitContext(context.Background(), tsNanos, wireBytes)
+}
+
+// WaitContext is Wait that gives up early, returning ctx.Err(), when ctx is
+// cancelled. Recorded gaps can be minutes long, so a stop request must not have
+// to wait for the next packet to become due.
+func (p *Pacer) WaitContext(ctx context.Context, tsNanos int64, wireBytes int) error {
 	if p.cfg.Mode == Burst {
-		return
+		return nil
 	}
 	if !p.started {
 		p.started, p.start, p.firstTs, p.prevTs = true, nanotime(), tsNanos, tsNanos
@@ -114,20 +122,32 @@ func (p *Pacer) Wait(tsNanos int64, wireBytes int) {
 	deadline := p.start + due
 	if late := nanotime() - deadline; late > int64(resyncAfter) {
 		p.start += late // forget the backlog
-		return
+		return nil
 	}
-	sleepUntil(deadline)
+	return sleepUntil(ctx, deadline)
 }
 
-// sleepUntil sleeps coarsely, then spins on the high-resolution clock for the tail.
-func sleepUntil(deadline int64) {
+// sleepUntil sleeps coarsely (interruptibly), then spins on the high-resolution
+// clock for the tail.
+func sleepUntil(ctx context.Context, deadline int64) error {
+	done := ctx.Done()
 	for {
 		rem := deadline - nanotime()
 		if rem <= 0 {
-			return
+			return nil
 		}
 		if rem > int64(spinThreshold) {
-			time.Sleep(time.Duration(rem) - spinThreshold)
+			if done == nil {
+				time.Sleep(time.Duration(rem) - spinThreshold)
+				continue
+			}
+			t := time.NewTimer(time.Duration(rem) - spinThreshold)
+			select {
+			case <-t.C:
+			case <-done:
+				t.Stop()
+				return ctx.Err()
+			}
 			continue
 		}
 		if rem > int64(50*time.Microsecond) {

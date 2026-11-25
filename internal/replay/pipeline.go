@@ -373,7 +373,10 @@ func send(ctx context.Context, cfg *Config, pc *pace.Pacer, cnt *Counters, q <-c
 		if !ok {
 			return flush()
 		}
-		pc.Wait(it.ts, len(it.buf.B))
+		if err := pc.WaitContext(ctx, it.ts, len(it.buf.B)); err != nil {
+			mutate.Put(it.buf)
+			return flush() // stopped during a gap; the caller drains the rest of the queue
+		}
 		batchBufs = append(batchBufs, it.buf)
 		batch = append(batch, it.buf.IPPacket())
 		if pc.Unpaced() {
